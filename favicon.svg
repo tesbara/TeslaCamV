@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- ダッシュカムアイコン -->
+  <rect x="4" y="12" width="40" height="24" rx="4" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="24" cy="24" r="8" fill="#0f172a" stroke="#60a5fa" stroke-width="1.5"/>
+  <circle cx="24" cy="24" r="4" fill="#3b82f6"/>
+  <circle cx="24" cy="24" r="1.5" fill="#93c5fd"/>
+  <!-- 録画インジケーター -->
+  <circle cx="38" cy="18" r="2.5" fill="#ef4444"/>
+</svg>
