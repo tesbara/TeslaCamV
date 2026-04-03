@@ -1,2 +1,0 @@
-# TeslaCamV
-Tesla Dashcam Viewer
