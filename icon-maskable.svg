@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- 背景 (maskable 用: 端まで塗りつぶし) -->
+  <rect width="512" height="512" fill="#080d18"/>
+  <!-- ダッシュカム本体 (中央 80% の安全領域いっぱいに配置) -->
+  <rect x="60" y="148" width="392" height="236" rx="40" fill="#1e293b" stroke="#3b82f6" stroke-width="18"/>
+  <!-- レンズ -->
+  <circle cx="256" cy="266" r="80" fill="#0f172a" stroke="#60a5fa" stroke-width="14"/>
+  <circle cx="256" cy="266" r="40" fill="#3b82f6"/>
+  <circle cx="256" cy="266" r="14" fill="#93c5fd"/>
+  <!-- 録画インジケーター -->
+  <circle cx="396" cy="196" r="22" fill="#ef4444"/>
+</svg>
