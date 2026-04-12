@@ -3,133 +3,374 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>動画再生テスト - 暗転確認用</title>
+  <title>暗転切り分けテスト</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: sans-serif;
       background: #1a1a1a;
       color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
+      padding: 12px;
     }
-    h1 { font-size: 18px; margin-bottom: 16px; }
-    #drop-zone {
-      width: 640px;
-      max-width: 100%;
-      aspect-ratio: 16/9;
-      border: 2px dashed #555;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      position: relative;
-    }
-    #drop-zone.has-video { border: none; }
-    #drop-zone.dragover { border-color: #4af; background: rgba(68,170,255,0.1); }
-    #drop-text { color: #888; font-size: 14px; text-align: center; line-height: 1.6; }
-    video {
-      width: 100%;
-      height: 100%;
-      display: none;
-      border-radius: 8px;
-      background: #000;
-    }
-    #controls {
-      margin-top: 16px;
-      display: none;
-      gap: 12px;
-      align-items: center;
-    }
-    button {
-      padding: 8px 24px;
-      font-size: 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
+    h1 { font-size: 16px; margin-bottom: 8px; text-align: center; }
+    #file-select { text-align: center; margin-bottom: 12px; }
+    #file-select label {
+      display: inline-block;
+      padding: 8px 20px;
       background: #4af;
       color: #fff;
-    }
-    button:hover { background: #5bf; }
-    #status {
+      border-radius: 6px;
+      cursor: pointer;
       font-size: 14px;
-      color: #aaa;
     }
     #file-input { display: none; }
+    #tests { display: none; }
+    .test-row {
+      border: 1px solid #333;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      padding: 8px;
+    }
+    .test-header {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .test-label { color: #4af; }
+    .test-desc { color: #aaa; font-weight: normal; font-size: 12px; }
+    .test-status { color: #888; font-size: 12px; margin-left: auto; }
+    .test-body {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .test-body video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .test-body canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      z-index: 10;
+    }
+    .btns {
+      margin-top: 6px;
+      display: flex;
+      gap: 6px;
+    }
+    .btns button {
+      padding: 4px 14px;
+      font-size: 13px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #555;
+      color: #fff;
+    }
+    .btns button:hover { background: #666; }
   </style>
 </head>
 <body>
-  <h1>動画再生テスト (暗転確認用)</h1>
-  <div id="drop-zone">
-    <span id="drop-text">ここに動画ファイルをドロップ<br>またはクリックして選択</span>
-    <video id="video"></video>
+  <h1>暗転切り分けテスト</h1>
+  <div id="file-select">
+    <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
-  <div id="controls">
-    <button id="btn-play">再生</button>
-    <button id="btn-pause">一時停止</button>
-    <span id="status">停止中</span>
+  <div id="tests">
+    <!-- A: 素の video (ベースライン) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">A: 素の video</span>
+        <span class="test-desc">File → createObjectURL → video.src (テスト前回と同じ)</span>
+        <span class="test-status" id="status-a"></span>
+      </div>
+      <div class="test-body"><video id="video-a" playsinline muted></video></div>
+      <div class="btns">
+        <button onclick="va.play()">再生</button>
+        <button onclick="va.pause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- B: mp4Faststart (Blob URL) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">B: mp4Faststart</span>
+        <span class="test-desc">moov 移動 + VUI パッチ → Blob URL</span>
+        <span class="test-status" id="status-b"></span>
+      </div>
+      <div class="test-body"><video id="video-b" playsinline muted></video></div>
+      <div class="btns">
+        <button onclick="vb.play()">再生</button>
+        <button onclick="vb.pause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- C: Canvas 転写 (video 表示) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">C: Canvas 転写 (video 可視)</span>
+        <span class="test-desc">素の video + rVFC で Canvas に drawImage (video も見える)</span>
+        <span class="test-status" id="status-c"></span>
+      </div>
+      <div class="test-body">
+        <video id="video-c" playsinline muted></video>
+        <canvas id="canvas-c"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="vc.play()">再生</button>
+        <button onclick="vc.pause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- D: Canvas 転写 (video 非表示 = TeslaCamV と同じ) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">D: Canvas のみ (video 非表示)</span>
+        <span class="test-desc">video を visibility:hidden にして Canvas だけ表示 (TeslaCamV 方式)</span>
+        <span class="test-status" id="status-d"></span>
+      </div>
+      <div class="test-body">
+        <video id="video-d" playsinline muted style="visibility:hidden"></video>
+        <canvas id="canvas-d"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="vd.play()">再生</button>
+        <button onclick="vd.pause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- E: mp4Faststart + Canvas のみ (フル再現) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">E: mp4Faststart + Canvas のみ</span>
+        <span class="test-desc">moov 移動 + VUI パッチ + video 非表示 + Canvas (TeslaCamV フル再現)</span>
+        <span class="test-status" id="status-e"></span>
+      </div>
+      <div class="test-body">
+        <video id="video-e" playsinline muted style="visibility:hidden"></video>
+        <canvas id="canvas-e"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="ve.play()">再生</button>
+        <button onclick="ve.pause()">一時停止</button>
+      </div>
+    </div>
   </div>
-  <input type="file" id="file-input" accept="video/*">
 
-  <script>
-    const video = document.getElementById('video');
-    const dropZone = document.getElementById('drop-zone');
-    const dropText = document.getElementById('drop-text');
-    const controls = document.getElementById('controls');
-    const btnPlay = document.getElementById('btn-play');
-    const btnPause = document.getElementById('btn-pause');
-    const status = document.getElementById('status');
-    const fileInput = document.getElementById('file-input');
+<script>
+// =====================================================================
+// mp4Faststart + SPS VUI パッチ (msePlayer.ts から移植)
+// =====================================================================
+function parseTopLevelBoxes(buffer) {
+  const view = new DataView(buffer);
+  const boxes = [];
+  let pos = 0;
+  while (pos + 8 <= buffer.byteLength) {
+    const size = view.getUint32(pos);
+    const type = String.fromCharCode(view.getUint8(pos+4), view.getUint8(pos+5), view.getUint8(pos+6), view.getUint8(pos+7));
+    if (size === 1 || size < 8) break;
+    const effectiveSize = size === 0 ? buffer.byteLength - pos : size;
+    boxes.push({ type, offset: pos, size: effectiveSize });
+    pos += effectiveSize;
+  }
+  return boxes;
+}
 
-    // ファイル読み込み
-    function loadFile(file) {
-      const url = URL.createObjectURL(file);
-      video.src = url;
-      video.style.display = 'block';
-      dropText.style.display = 'none';
-      dropZone.classList.add('has-video');
-      controls.style.display = 'flex';
-      status.textContent = '読み込み済み: ' + file.name;
+function updateChunkOffsets(view, start, end, delta) {
+  const CONTAINERS = new Set(['trak','mdia','minf','stbl','udta']);
+  let offset = start;
+  while (offset + 8 <= end) {
+    const boxSize = view.getUint32(offset);
+    const boxType = String.fromCharCode(view.getUint8(offset+4), view.getUint8(offset+5), view.getUint8(offset+6), view.getUint8(offset+7));
+    if (boxSize < 8 || offset + boxSize > end) break;
+    if (boxType === 'stco') {
+      const n = view.getUint32(offset + 12);
+      for (let i = 0; i < n; i++) { const p = offset + 16 + i*4; view.setUint32(p, view.getUint32(p) + delta); }
+    } else if (boxType === 'co64') {
+      const n = view.getUint32(offset + 12);
+      for (let i = 0; i < n; i++) {
+        const p = offset + 16 + i*8; const lo = view.getUint32(p+4); const newLo = (lo + delta) >>> 0;
+        view.setUint32(p, view.getUint32(p) + (lo + delta > 0xFFFFFFFF ? 1 : 0)); view.setUint32(p+4, newLo);
+      }
+    } else if (CONTAINERS.has(boxType)) { updateChunkOffsets(view, offset+8, offset+boxSize, delta); }
+    offset += boxSize;
+  }
+}
+
+function patchSpsRemoveVui(sps) {
+  let bitPos = 8;
+  const totalBits = sps.length * 8;
+  function readBit() { if (bitPos >= totalBits) return 0; const v = (sps[bitPos >> 3] >> (7 - (bitPos & 7))) & 1; bitPos++; return v; }
+  function readBits(n) { let v = 0; for (let i = 0; i < n; i++) v = (v << 1) | readBit(); return v; }
+  function readUE() { let zeros = 0; while (readBit() === 0 && zeros < 32) zeros++; return (1 << zeros) - 1 + readBits(zeros); }
+  function readSE() { const v = readUE(); return (v & 1) ? (v + 1) >> 1 : -(v >> 1); }
+  try {
+    const profile = readBits(8);
+    readBits(8); readBits(8); readUE();
+    const HIGH = [100,110,122,244,44,83,86,118,128,138,139,134];
+    if (HIGH.includes(profile)) {
+      const cf = readUE(); if (cf === 3) readBit();
+      readUE(); readUE(); readBit();
+      if (readBit()) return false;
     }
+    readUE();
+    const pocType = readUE();
+    if (pocType === 0) { readUE(); }
+    else if (pocType === 1) { readBit(); readSE(); readSE(); const n = readUE(); for (let i = 0; i < n; i++) readSE(); }
+    readUE(); readBit(); readUE(); readUE();
+    if (!readBit()) readBit();
+    readBit();
+    if (readBit()) { readUE(); readUE(); readUE(); readUE(); }
+    const vuiBitPos = bitPos;
+    const vuiPresent = readBit();
+    if (vuiPresent) {
+      const byteIdx = vuiBitPos >> 3;
+      const bitIdx = 7 - (vuiBitPos & 7);
+      sps[byteIdx] &= ~(1 << bitIdx);
+      return true;
+    }
+  } catch {}
+  return false;
+}
 
-    // ドロップ
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('dragover');
-    });
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
-      if (e.dataTransfer.files.length > 0) loadFile(e.dataTransfer.files[0]);
-    });
+function patchMoovSpsVui(buf) {
+  function u32(o) { return (buf[o]<<24)|(buf[o+1]<<16)|(buf[o+2]<<8)|buf[o+3]; }
+  function bt(o) { return String.fromCharCode(buf[o+4],buf[o+5],buf[o+6],buf[o+7]); }
+  function traverse(s, e) {
+    let p = s;
+    while (p+8 <= e) {
+      const sz = u32(p), t = bt(p);
+      if (sz < 8 || p+sz > e) break;
+      if (['trak','mdia','minf','stbl'].includes(t)) traverse(p+8, p+sz);
+      else if (t === 'stsd') traverse(p+16, p+sz);
+      else if (t === 'avc1') traverse(p+86, p+sz);
+      else if (t === 'avcC') patchAvcC(p+8, p+sz);
+      p += sz;
+    }
+  }
+  function patchAvcC(s, e) {
+    if (s+6 > e) return;
+    const n = buf[s+5] & 0x1F;
+    let o = s+6;
+    for (let i = 0; i < n; i++) {
+      if (o+2 > e) return;
+      const len = (buf[o]<<8)|buf[o+1]; o += 2;
+      if (o+len > e) return;
+      patchSpsRemoveVui(buf.subarray(o, o+len));
+      o += len;
+    }
+  }
+  traverse(8, buf.length);
+}
 
-    // クリックで選択
-    dropZone.addEventListener('click', () => {
-      if (!video.src) fileInput.click();
-    });
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files.length > 0) loadFile(fileInput.files[0]);
-    });
+async function mp4Faststart(file) {
+  const buffer = await file.arrayBuffer();
+  const boxes = parseTopLevelBoxes(buffer);
+  const moovBox = boxes.find(b => b.type === 'moov');
+  const firstMdat = boxes.find(b => b.type === 'mdat');
+  if (!moovBox || !firstMdat || moovBox.offset < firstMdat.offset) return new Blob([buffer], { type: 'video/mp4' });
+  const moovBuffer = buffer.slice(moovBox.offset, moovBox.offset + moovBox.size);
+  patchMoovSpsVui(new Uint8Array(moovBuffer));
+  updateChunkOffsets(new DataView(moovBuffer), 8, moovBox.size, moovBox.size);
+  const parts = [];
+  const ftypBox = boxes.find(b => b.type === 'ftyp');
+  if (ftypBox) parts.push(buffer.slice(ftypBox.offset, ftypBox.offset + ftypBox.size));
+  parts.push(moovBuffer);
+  for (const box of boxes) { if (box.type !== 'ftyp' && box.type !== 'moov') parts.push(buffer.slice(box.offset, box.offset + box.size)); }
+  return new Blob(parts, { type: 'video/mp4' });
+}
 
-    // 再生・一時停止
-    btnPlay.addEventListener('click', () => {
-      video.play();
-    });
-    btnPause.addEventListener('click', () => {
-      video.pause();
-    });
+// =====================================================================
+// rVFC ループ (video → canvas に毎フレーム転写)
+// =====================================================================
+function startCanvasLoop(video, canvas) {
+  const ctx = canvas.getContext('2d');
+  function draw() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    // rVFC が使えれば rVFC、なければ rAF
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(draw);
+    } else {
+      requestAnimationFrame(draw);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(draw);
+  } else {
+    requestAnimationFrame(draw);
+  }
+}
 
-    video.addEventListener('play', () => { status.textContent = '再生中'; });
-    video.addEventListener('pause', () => { status.textContent = '一時停止'; });
-    video.addEventListener('ended', () => { status.textContent = '再生完了'; });
-  </script>
+// =====================================================================
+// 初期化
+// =====================================================================
+const va = document.getElementById('video-a');
+const vb = document.getElementById('video-b');
+const vc = document.getElementById('video-c');
+const vd = document.getElementById('video-d');
+const ve = document.getElementById('video-e');
+
+// ステータス表示
+['a','b','c','d','e'].forEach(id => {
+  const v = document.getElementById('video-' + id);
+  const s = document.getElementById('status-' + id);
+  v.addEventListener('play', () => s.textContent = '再生中');
+  v.addEventListener('pause', () => s.textContent = '一時停止');
+  v.addEventListener('ended', () => s.textContent = '再生完了');
+});
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('file-select').style.display = 'none';
+  document.getElementById('tests').style.display = 'block';
+
+  // A: 素の video
+  const urlA = URL.createObjectURL(file);
+  va.src = urlA;
+
+  // B: mp4Faststart (Blob URL)
+  document.getElementById('status-b').textContent = '処理中...';
+  const blobB = await mp4Faststart(file);
+  const urlB = URL.createObjectURL(blobB);
+  vb.src = urlB;
+  document.getElementById('status-b').textContent = '準備完了';
+
+  // C: Canvas 転写 (video 可視)
+  const urlC = URL.createObjectURL(file);
+  vc.src = urlC;
+  startCanvasLoop(vc, document.getElementById('canvas-c'));
+
+  // D: Canvas のみ (video 非表示)
+  const urlD = URL.createObjectURL(file);
+  vd.src = urlD;
+  startCanvasLoop(vd, document.getElementById('canvas-d'));
+
+  // E: mp4Faststart + Canvas のみ (フル再現)
+  document.getElementById('status-e').textContent = '処理中...';
+  const blobE = await mp4Faststart(file);
+  const urlE = URL.createObjectURL(blobE);
+  ve.src = urlE;
+  startCanvasLoop(ve, document.getElementById('canvas-e'));
+  document.getElementById('status-e').textContent = '準備完了';
+});
+</script>
 </body>
 </html>
