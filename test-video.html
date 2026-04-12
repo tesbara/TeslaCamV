@@ -164,37 +164,54 @@
       </div>
     </div>
 
-    <!-- E2: 一時停止後に currentTime 再セット + Canvas -->
+    <!-- E2: pause+再シーク+seeked後drawImage (素の video) -->
     <div class="test-row">
       <div class="test-header">
-        <span class="test-label">E2: pause+再シーク+Canvas (video 非表示)</span>
-        <span class="test-desc">pause 後に currentTime 再セット + Canvas 表示 (TeslaCamV 再現)</span>
-        <span class="test-status" id="status-e3"></span>
+        <span class="test-label">E2: pause+再シーク+seeked後キャプチャ (素)</span>
+        <span class="test-desc">pause 後 currentTime 再セット → seeked で video→canvas に drawImage</span>
+        <span class="test-status" id="status-e5"></span>
       </div>
       <div class="test-body">
-        <video id="video-e3" playsinline muted style="visibility:hidden"></video>
-        <canvas id="canvas-e3"></canvas>
+        <video id="video-e5" playsinline muted></video>
+        <canvas id="canvas-e5" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:10"></canvas>
       </div>
       <div class="btns">
-        <button onclick="ve3.play()">再生</button>
-        <button onclick="pauseAndReseek(ve3, 'status-e3')">一時停止+再シーク</button>
+        <button onclick="ve5.play()">再生</button>
+        <button onclick="pauseReseekCapture(ve5, document.getElementById('canvas-e5'), 'status-e5')">一時停止+seeked後キャプチャ</button>
       </div>
     </div>
 
-    <!-- E3: mp4Faststart + pause+再シーク + Canvas (video 非表示) -->
+    <!-- E3: pause+再シーク+seeked後drawImage + video 非表示 -->
     <div class="test-row">
       <div class="test-header">
-        <span class="test-label">E3: mp4Faststart+pause+再シーク+Canvas</span>
-        <span class="test-desc">mp4Faststart + pause 後に currentTime 再セット + Canvas (フル再現)</span>
-        <span class="test-status" id="status-e4"></span>
+        <span class="test-label">E3: pause+再シーク+seeked後キャプチャ (video 非表示)</span>
+        <span class="test-desc">同上 + video を visibility:hidden にして Canvas だけ表示</span>
+        <span class="test-status" id="status-e6"></span>
       </div>
       <div class="test-body">
-        <video id="video-e4" playsinline muted style="visibility:hidden"></video>
-        <canvas id="canvas-e4"></canvas>
+        <video id="video-e6" playsinline muted style="visibility:hidden"></video>
+        <canvas id="canvas-e6" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:10"></canvas>
       </div>
       <div class="btns">
-        <button onclick="ve4.play()">再生</button>
-        <button onclick="pauseAndReseek(ve4, 'status-e4')">一時停止+再シーク</button>
+        <button onclick="ve6.play()">再生</button>
+        <button onclick="pauseReseekCapture(ve6, document.getElementById('canvas-e6'), 'status-e6')">一時停止+seeked後キャプチャ</button>
+      </div>
+    </div>
+
+    <!-- E4: mp4Faststart + pause+再シーク+seeked後drawImage + video 非表示 -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">E4: mp4Faststart+pause+seeked後キャプチャ+Canvas</span>
+        <span class="test-desc">mp4Faststart + pause + seeked 後 drawImage + video 非表示 (TeslaCamV 最接近)</span>
+        <span class="test-status" id="status-e7"></span>
+      </div>
+      <div class="test-body">
+        <video id="video-e7" playsinline muted style="visibility:hidden"></video>
+        <canvas id="canvas-e7" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;z-index:10"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="ve7.play()">再生</button>
+        <button onclick="pauseReseekCapture(ve7, document.getElementById('canvas-e7'), 'status-e7')">一時停止+seeked後キャプチャ</button>
       </div>
     </div>
 
@@ -456,8 +473,9 @@ const vc = document.getElementById('video-c');
 const vd = document.getElementById('video-d');
 const ve = document.getElementById('video-e');
 const ve2 = document.getElementById('video-e2');
-const ve3 = document.getElementById('video-e3');
-const ve4 = document.getElementById('video-e4');
+const ve5 = document.getElementById('video-e5');
+const ve6 = document.getElementById('video-e6');
+const ve7 = document.getElementById('video-e7');
 
 // 一時停止 + currentTime 再セット (TeslaCamV の syncAllCameras が行う処理を再現)
 function pauseAndReseek(video, statusId) {
@@ -465,6 +483,29 @@ function pauseAndReseek(video, statusId) {
   const t = video.currentTime;
   video.currentTime = t;
   document.getElementById(statusId).textContent = '一時停止 + 再シーク (t=' + t.toFixed(2) + ')';
+}
+
+// 一時停止 + currentTime 再セット + seeked 後に canvas へ drawImage
+// (TeslaCamV の seekTo → seeked → captureFrame を再現)
+function pauseReseekCapture(video, canvas, statusId) {
+  video.pause();
+  const t = video.currentTime;
+  video.currentTime = t;
+  const s = document.getElementById(statusId);
+  s.textContent = '一時停止 + 再シーク中... (t=' + t.toFixed(2) + ')';
+  video.addEventListener('seeked', function onSeeked() {
+    video.removeEventListener('seeked', onSeeked);
+    // seeked 後に canvas へ drawImage (TeslaCamV の captureFrame と同じ)
+    const ctx = canvas.getContext('2d');
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    s.textContent = '一時停止 + seeked 後キャプチャ完了 (t=' + t.toFixed(2) + ')';
+  });
 }
 
 // F: 4 video 同時
@@ -480,7 +521,7 @@ const hVideos = [1,2,3,4].map(i => document.getElementById('video-h'+i));
 function hAll(action) { hVideos.forEach(v => v[action]()); }
 
 // ステータス表示
-['a','b','c','d','e','e2','e3','e4','f','g','h'].forEach(id => {
+['a','b','c','d','e','e2','e5','e6','e7','f','g','h'].forEach(id => {
   // F,G,H は最初の video のイベントでステータス表示
   const v = document.getElementById('video-' + id) || document.getElementById('video-' + id + '1');
   const s = document.getElementById('status-' + id);
@@ -517,16 +558,17 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
   // E (新): pause + currentTime 再セット (素の video)
   ve2.src = URL.createObjectURL(file);
 
-  // E2: pause + currentTime 再セット + Canvas (video 非表示)
-  ve3.src = URL.createObjectURL(file);
-  startCanvasLoop(ve3, document.getElementById('canvas-e3'));
+  // E2: pause + seeked 後 drawImage (素の video)
+  ve5.src = URL.createObjectURL(file);
 
-  // E3: mp4Faststart + pause + currentTime 再セット + Canvas (video 非表示)
-  document.getElementById('status-e4').textContent = '処理中...';
-  const blobE4 = await mp4Faststart(file);
-  ve4.src = URL.createObjectURL(blobE4);
-  startCanvasLoop(ve4, document.getElementById('canvas-e4'));
-  document.getElementById('status-e4').textContent = '準備完了';
+  // E3: pause + seeked 後 drawImage (video 非表示)
+  ve6.src = URL.createObjectURL(file);
+
+  // E4: mp4Faststart + pause + seeked 後 drawImage (video 非表示)
+  document.getElementById('status-e7').textContent = '処理中...';
+  const blobE7 = await mp4Faststart(file);
+  ve7.src = URL.createObjectURL(blobE7);
+  document.getElementById('status-e7').textContent = '準備完了';
 
   // 旧 E: mp4Faststart + Canvas のみ (フル再現)
   document.getElementById('status-e').textContent = '処理中...';
