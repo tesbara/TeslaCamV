@@ -95,11 +95,44 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:39)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:50)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- Z: rVFC を止めずに pause + seekTo (本体と同じ動作) -->
+    <div class="test-row" style="border-color:#f80">
+      <div class="test-header">
+        <span class="test-label" style="color:#f80">Z: rVFC 継続中の pause+seekTo (本体再現)</span>
+        <span class="test-desc">rVFC ループを止めずに pause + currentTime 再セット → rVFC が drawImage する時の輝度を記録</span>
+        <span class="test-status" id="status-z"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-z1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-z1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-z2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-z2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-z3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-z3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-z4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-z4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="zPlay()">4 video 再生</button>
+        <button onclick="zPauseAndSeek()">一時停止 + seekTo (rVFC継続)</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- Y: seeked 遅延 + drawImage 輝度測定 (本体ログ再現) -->
     <div class="test-row" style="border-color:#ff0">
       <div class="test-header">
@@ -818,6 +851,73 @@ function stopRvfc(video) {
   }
 }
 
+// --- Z: rVFC を止めずに pause + seekTo (本体再現) ---
+const zVids = [1,2,3,4].map(i => document.getElementById('vid-z'+i));
+const zCvs  = [1,2,3,4].map(i => document.getElementById('cvs-z'+i));
+const zPaused = [false,false,false,false];  // 各 video が一時停止後フェーズか
+const zT0 = [0,0,0,0];
+
+// 本体と同じ rVFC ループ (常に回り続け、captureFrame と同等の処理を行う)
+function startRvfcWithLog(video, canvas, idx) {
+  const ctx = canvas.getContext('2d');
+  let prevB = -1;
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      // 一時停止フェーズの時のみログを出す
+      if (zPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - zT0[idx]).toFixed(0);
+        if (b !== prevB) {
+          dlog('Z[cam' + (idx+1) + ']: rVFC 発火 (' + elapsed + 'ms 経過) drawImage→ brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevB = b;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(loop);
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+
+function zPlay() {
+  zPaused.fill(false);
+  zVids.forEach((v, i) => {
+    v.play().then(() => dlog('Z[cam'+(i+1)+']: play() resolved')).catch(e => dlog('Z[cam'+(i+1)+']: play() error: '+e.message));
+    startRvfcWithLog(v, zCvs[i], i);
+  });
+  document.getElementById('status-z').textContent = '4 video 再生中 (rVFC ループ実行中)';
+  dlog('Z: 4 video 再生開始 (rVFC ループ継続)');
+}
+
+function zPauseAndSeek() {
+  dlog('Z: pause + seekTo (rVFC継続) 開始 ===');
+  zVids.forEach((v, i) => {
+    zT0[i] = performance.now();
+    const ct = v.currentTime;
+    v.pause();
+    // rVFC は止めない
+    dlog('Z[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' brightness=' + measureBrightness(zCvs[i]));
+    v.currentTime = ct;
+    zPaused[i] = true;  // ここから rVFC 発火を記録
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - zT0[i]).toFixed(0);
+      dlog('Z[cam'+(i+1)+']: seeked イベント (' + elapsed + 'ms 経過)');
+    });
+  });
+}
+
 // --- Y: seeked 遅延 + 輝度測定 (本体ログの再現) ---
 const yVids = [1,2,3,4].map(i => document.getElementById('vid-y'+i));
 const yCvs  = [1,2,3,4].map(i => document.getElementById('cvs-y'+i));
@@ -1264,7 +1364,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
@@ -1361,10 +1461,12 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     startCanvasLoop(v, pCvs[i]);
   });
 
-  // Y: 4 video 初期ロード (yPlay で即 play() できるように)
+  // Y, Z: 4 video 初期ロード (yPlay/zPlay で即 play() できるように)
   for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(file);
-    yVids[i].src = URL.createObjectURL(blob);
+    const blobY = await mp4Faststart(file);
+    yVids[i].src = URL.createObjectURL(blobY);
+    const blobZ = await mp4Faststart(file);
+    zVids[i].src = URL.createObjectURL(blobZ);
   }
 
   // V, W: 初期ロード (差し替えテスト用)
