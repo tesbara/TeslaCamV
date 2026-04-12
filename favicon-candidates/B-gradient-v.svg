@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- 案B: グラデーション丸 + V -->
+  <!-- アプリ名の「V」をシンボル化。クリーンでアプリアイコンらしい -->
+  <defs>
+    <linearGradient id="bgB" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- 角丸四角の背景 -->
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#bgB)"/>
+  <!-- V の文字 (太めのストロークで表現) -->
+  <path d="M14 14 L24 36 L34 14" fill="none" stroke="white" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 底にアクセントのドット -->
+  <circle cx="24" cy="38" r="1.5" fill="white" opacity="0.6"/>
+</svg>

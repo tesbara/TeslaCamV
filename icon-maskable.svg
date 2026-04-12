@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <!-- 背景 (maskable 用: 端まで塗りつぶし) -->
+  <!-- maskable アイコン用: 端まで塗りつぶし背景 + 青基調ダッシュカム + 赤レンズ -->
   <rect width="512" height="512" fill="#080d18"/>
-  <!-- ダッシュカム本体 (中央 80% の安全領域よりやや内側に配置) -->
-  <rect x="86" y="166" width="340" height="204" rx="36" fill="#1e293b" stroke="#3b82f6" stroke-width="16"/>
+  <!-- ダッシュカム筐体 (中央 80% 安全領域内に配置、1.5px 分上にずらし相当) -->
+  <rect x="56" y="150" width="400" height="204" rx="36" fill="#080d18" stroke="#3b82f6" stroke-width="16"/>
   <!-- レンズ -->
-  <circle cx="256" cy="268" r="70" fill="#0f172a" stroke="#60a5fa" stroke-width="12"/>
-  <circle cx="256" cy="268" r="36" fill="#3b82f6"/>
-  <circle cx="256" cy="268" r="12" fill="#93c5fd"/>
+  <circle cx="256" cy="252" r="70" fill="#cc0000" stroke="#60a5fa" stroke-width="12"/>
+  <circle cx="256" cy="252" r="36" fill="#990000"/>
+  <circle cx="256" cy="252" r="12" fill="#1a0505"/>
   <!-- 録画インジケーター -->
-  <circle cx="390" cy="206" r="20" fill="#ef4444"/>
+  <circle cx="400" cy="190" r="20" fill="#ef4444"/>
 </svg>

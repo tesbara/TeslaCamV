@@ -1,9 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <!-- 青基調ダッシュカム + 赤レンズ。筐体は透過 -->
+  <!-- 案L: 青基調 + レンズ内側のみ赤。カメラ筐体は透過 (ライトモードで白背景に馴染む) -->
   <!-- 全体を 1.5px 上にずらして視覚的中央に調整 -->
+  <!-- ダッシュカム筐体 (塗りなし = 透過) -->
   <rect x="4" y="10.5" width="40" height="24" rx="4" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <!-- レンズ (全体赤系) -->
   <circle cx="24" cy="22.5" r="8" fill="#cc0000" stroke="#60a5fa" stroke-width="1.5"/>
   <circle cx="24" cy="22.5" r="4" fill="#990000"/>
   <circle cx="24" cy="22.5" r="1.5" fill="#1a0505"/>
+  <!-- 録画インジケーター -->
   <circle cx="38" cy="16.5" r="2.5" fill="#ef4444"/>
 </svg>

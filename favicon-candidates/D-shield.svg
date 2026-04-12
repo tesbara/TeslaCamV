@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- 案D: シールド + レンズ -->
+  <!-- Tesla セントリーモードを連想させる盾の形にカメラレンズ -->
+  <defs>
+    <linearGradient id="shieldD" x1="24" y1="2" x2="24" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <!-- シールド形状 -->
+  <path d="M24 3 L42 12 L42 26 C42 36 34 43 24 46 C14 43 6 36 6 26 L6 12 Z"
+        fill="url(#shieldD)" stroke="#3b82f6" stroke-width="1.5"/>
+  <!-- カメラレンズ -->
+  <circle cx="24" cy="22" r="9" fill="none" stroke="#60a5fa" stroke-width="1.5"/>
+  <circle cx="24" cy="22" r="5" fill="#3b82f6"/>
+  <circle cx="24" cy="22" r="2" fill="#93c5fd"/>
+  <!-- 底のアクセント -->
+  <path d="M18 36 L24 40 L30 36" fill="none" stroke="#60a5fa" stroke-width="1" opacity="0.5"/>
+</svg>

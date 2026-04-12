@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Favicon 候補プレビュー</title>
+<style>
+  body {
+    background: #111827;
+    color: #e5e7eb;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    margin: 0;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 32px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 32px;
+    max-width: 960px;
+    width: 100%;
+  }
+  .card {
+    background: #1f2937;
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .card h2 { font-size: 1rem; margin: 0; color: #93c5fd; }
+  .card p { font-size: 0.85rem; color: #9ca3af; text-align: center; margin: 0; }
+  .sizes {
+    display: flex;
+    align-items: end;
+    gap: 16px;
+  }
+  .sizes figure {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+  }
+  .sizes figcaption { font-size: 0.7rem; color: #6b7280; }
+  .current {
+    border: 2px dashed #4b5563;
+  }
+  .current h2::after {
+    content: " (現在)";
+    color: #6b7280;
+    font-weight: normal;
+  }
+  .section-label {
+    grid-column: 1 / -1;
+    font-size: 1.1rem;
+    color: #60a5fa;
+    border-top: 1px solid #374151;
+    padding-top: 16px;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+<h1>TeslaCamV Favicon 候補</h1>
+<div class="grid">
+
+  <div class="card current">
+    <h2>現在のアイコン</h2>
+    <div class="sizes">
+      <figure><img src="../favicon.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="../favicon.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="../favicon.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>ダッシュカム本体 (長方形 + レンズ + 録画LED)</p>
+  </div>
+
+  <div class="card">
+    <h2>案A: レンズ + 再生ボタン</h2>
+    <div class="sizes">
+      <figure><img src="A-lens-play.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="A-lens-play.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="A-lens-play.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>カメラレンズの中に再生三角。動画ビューワーであることが直感的</p>
+  </div>
+
+  <div class="card">
+    <h2>案B: グラデーション V</h2>
+    <div class="sizes">
+      <figure><img src="B-gradient-v.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="B-gradient-v.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="B-gradient-v.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>アプリ名「V」をシンボル化。クリーンでアプリアイコンらしい</p>
+  </div>
+
+  <div class="card">
+    <h2>案C: ミニマルカメラ</h2>
+    <div class="sizes">
+      <figure><img src="C-minimal-cam.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="C-minimal-cam.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="C-minimal-cam.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>洗練された丸型レンズ + 赤い録画ドット。ダッシュカムらしさを残しつつモダン</p>
+  </div>
+
+  <div class="card">
+    <h2>案D: シールド + レンズ</h2>
+    <div class="sizes">
+      <figure><img src="D-shield.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="D-shield.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="D-shield.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>Tesla セントリーモードを連想させる盾 + カメラレンズ</p>
+  </div>
+
+  <div class="card">
+    <h2>案E: 6カメラグリッド</h2>
+    <div class="sizes">
+      <figure><img src="E-grid6.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="E-grid6.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="E-grid6.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>6カメラ同時表示をモチーフ。TeslaCamV の特徴を象徴するデザイン</p>
+  </div>
+
+  <h3 class="section-label">テスラマーク系</h3>
+
+  <div class="card">
+    <h2>案K: ダッシュカム + レンズ内テスラ T</h2>
+    <div class="sizes">
+      <figure><img src="K-cam-tesla-lens.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="K-cam-tesla-lens.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="K-cam-tesla-lens.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>現在のダッシュカムデザインのレンズ部分にテスラ T マークを配置</p>
+  </div>
+
+  <div class="card">
+    <h2>案F: テスラ T + ダッシュカム</h2>
+    <div class="sizes">
+      <figure><img src="F-tesla-cam.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="F-tesla-cam.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="F-tesla-cam.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>テスラ T マークの下にカメラレンズを配置</p>
+  </div>
+
+  <div class="card">
+    <h2>案G: レンズ内テスラ T</h2>
+    <div class="sizes">
+      <figure><img src="G-tesla-lens.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="G-tesla-lens.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="G-tesla-lens.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>カメラレンズの反射としてテスラ T マークが浮かぶ</p>
+  </div>
+
+  <h3 class="section-label">レッド (#CC0000) 基調</h3>
+
+  <div class="card">
+    <h2>案H: レッド ダッシュカム</h2>
+    <div class="sizes">
+      <figure><img src="H-red-cam.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="H-red-cam.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="H-red-cam.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>現在のダッシュカムデザインを #CC0000 ベースに</p>
+  </div>
+
+  <div class="card">
+    <h2>案I: レッド丸型レンズ</h2>
+    <div class="sizes">
+      <figure><img src="I-red-circle.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="I-red-circle.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="I-red-circle.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>モダンな丸型レンズを #CC0000 カラーパレットで</p>
+  </div>
+
+  <div class="card">
+    <h2>案J: レッド + テスラ T + レンズ</h2>
+    <div class="sizes">
+      <figure><img src="J-red-tesla.svg" width="128" height="128"><figcaption>128px</figcaption></figure>
+      <figure><img src="J-red-tesla.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="J-red-tesla.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <p>レッド基調 + テスラ T マーク + カメラレンズの全部入り</p>
+  </div>
+
+  <h3 class="section-label">青基調 + 赤レンズ</h3>
+
+  <div class="card">
+    <h2>案L: 青筐体 (透過) + 赤レンズ</h2>
+    <div class="sizes">
+      <figure><img src="L-blue-redlens.svg" width="128" height="128"><figcaption>128px (dark)</figcaption></figure>
+      <figure><img src="L-blue-redlens.svg" width="32" height="32"><figcaption>32px</figcaption></figure>
+      <figure><img src="L-blue-redlens.svg" width="16" height="16"><figcaption>16px</figcaption></figure>
+    </div>
+    <div class="sizes" style="background:#f8fafc;border-radius:8px;padding:12px">
+      <figure><img src="L-blue-redlens.svg" width="128" height="128"><figcaption style="color:#6b7280">128px (light)</figcaption></figure>
+      <figure><img src="L-blue-redlens.svg" width="32" height="32"><figcaption style="color:#6b7280">32px</figcaption></figure>
+      <figure><img src="L-blue-redlens.svg" width="16" height="16"><figcaption style="color:#6b7280">16px</figcaption></figure>
+    </div>
+    <p>青い枠線 + 透過筐体 (ライトモードで白背景に馴染む)。レンズ内側のみ赤</p>
+  </div>
+
+</div>
+</body>
+</html>
