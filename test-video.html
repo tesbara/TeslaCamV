@@ -95,11 +95,48 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:50)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:05)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- AA: 5 video + rVFC 継続 + pause + seekTo + readyState ログ -->
+    <div class="test-row" style="border-color:#0f0">
+      <div class="test-header">
+        <span class="test-label" style="color:#0f0">AA: 5 video + readyState ログ</span>
+        <span class="test-desc">本体と同じ 5 video。pause 後 currentTime 再セット → rVFC で readyState と brightness を記録</span>
+        <span class="test-status" id="status-aa"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:600px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-aa1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-aa1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-aa2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-aa2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-aa3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-aa3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-aa4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-aa4"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-aa5" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-aa5"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="aaPlay()">5 video 再生</button>
+        <button onclick="aaPauseAndSeek()">一時停止 + seekTo (rVFC継続)</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- Z: rVFC を止めずに pause + seekTo (本体と同じ動作) -->
     <div class="test-row" style="border-color:#f80">
       <div class="test-header">
@@ -851,6 +888,71 @@ function stopRvfc(video) {
   }
 }
 
+// --- AA: 5 video + readyState ログ (本体と同じデコーダ枯渇を再現) ---
+const aaVids = [1,2,3,4,5].map(i => document.getElementById('vid-aa'+i));
+const aaCvs  = [1,2,3,4,5].map(i => document.getElementById('cvs-aa'+i));
+const aaPaused = [false,false,false,false,false];
+const aaT0 = [0,0,0,0,0];
+
+function startRvfcWithReadyState(video, canvas, idx, label) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (aaPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - aaT0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog(label + '[cam' + (idx+1) + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(loop);
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+
+function aaPlay() {
+  aaPaused.fill(false);
+  aaVids.forEach((v, i) => {
+    v.play().then(() => dlog('AA[cam'+(i+1)+']: play() resolved')).catch(e => dlog('AA[cam'+(i+1)+']: play() error: '+e.message));
+    startRvfcWithReadyState(v, aaCvs[i], i, 'AA');
+  });
+  document.getElementById('status-aa').textContent = '5 video 再生中';
+  dlog('AA: 5 video 再生開始');
+}
+
+function aaPauseAndSeek() {
+  dlog('AA: pause + seekTo (5 video) 開始 ===');
+  aaVids.forEach((v, i) => {
+    aaT0[i] = performance.now();
+    const ct = v.currentTime;
+    v.pause();
+    dlog('AA[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(aaCvs[i]));
+    v.currentTime = ct;
+    aaPaused[i] = true;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - aaT0[i]).toFixed(0);
+      dlog('AA[cam'+(i+1)+']: seeked ' + elapsed + 'ms rs=' + v.readyState);
+    });
+  });
+}
+
 // --- Z: rVFC を止めずに pause + seekTo (本体再現) ---
 const zVids = [1,2,3,4].map(i => document.getElementById('vid-z'+i));
 const zCvs  = [1,2,3,4].map(i => document.getElementById('cvs-z'+i));
@@ -1364,7 +1466,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
@@ -1467,6 +1569,11 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     yVids[i].src = URL.createObjectURL(blobY);
     const blobZ = await mp4Faststart(file);
     zVids[i].src = URL.createObjectURL(blobZ);
+  }
+  // AA: 5 video 初期ロード (本体と同じ video 数で再現)
+  for (let i = 0; i < 5; i++) {
+    const blob = await mp4Faststart(file);
+    aaVids[i].src = URL.createObjectURL(blob);
   }
 
   // V, W: 初期ロード (差し替えテスト用)
