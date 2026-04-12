@@ -95,11 +95,46 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:15)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:25)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- BB: 8 video (4 表示 + 4 idle = 本体と同じ video 数) -->
+    <div class="test-row" style="border-color:#f0f">
+      <div class="test-header">
+        <span class="test-label" style="color:#f0f">BB: 8 video (本体の MsePlayer 数 x2 を再現)</span>
+        <span class="test-desc">表示用 4 video + idle (src あり) 4 video。本体は MsePlayer ごとに _captureVideo を持つので合計 8 video</span>
+        <span class="test-status" id="status-bb"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-bb1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-bb1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-bb2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-bb2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-bb3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-bb3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-bb4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-bb4"></canvas>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:4px">+ 非表示 idle video 4 個 (src あり、preload=auto)</div>
+      <div class="btns">
+        <button onclick="bbPlay()">4 video 再生 (idle 4 個も裏で確保)</button>
+        <button onclick="bbPauseAndSeek()">一時停止 + seekTo</button>
+        <button onclick="bbAutoTest(30)">自動: 30秒再生→pause</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- AA: 5 video + rVFC 継続 + pause + seekTo + readyState ログ -->
     <div class="test-row" style="border-color:#0f0">
       <div class="test-header">
@@ -890,6 +925,98 @@ function stopRvfc(video) {
   }
 }
 
+// --- BB: 8 video (4 表示 + 4 idle) ---
+const bbVids = [1,2,3,4].map(i => document.getElementById('vid-bb'+i));
+const bbCvs  = [1,2,3,4].map(i => document.getElementById('cvs-bb'+i));
+const bbIdleVids = [];  // 4 個の idle video (DOM に追加しない)
+const bbPaused = [false,false,false,false];
+const bbT0 = [0,0,0,0];
+
+function startRvfcWithReadyStateBB(video, canvas, idx) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (bbPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - bbT0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog('BB[cam' + (idx+1) + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(loop);
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+
+async function bbPlay() {
+  bbPaused.fill(false);
+  // idle video 4 個を作成 (DOM に追加しない、本体の _captureVideo 相当)
+  if (bbIdleVids.length === 0) {
+    dlog('BB: idle video 4 個を作成中...');
+    for (let i = 0; i < 4; i++) {
+      const v = document.createElement('video');
+      v.muted = true;
+      v.preload = 'auto';
+      v.playsInline = true;
+      const blob = await mp4Faststart(currentFile);
+      v.src = URL.createObjectURL(blob);
+      bbIdleVids.push(v);
+    }
+    dlog('BB: idle video 4 個作成完了');
+  }
+  bbVids.forEach((v, i) => {
+    v.play().then(() => dlog('BB[cam'+(i+1)+']: play() resolved')).catch(e => dlog('BB[cam'+(i+1)+']: play() error: '+e.message));
+    startRvfcWithReadyStateBB(v, bbCvs[i], i);
+  });
+  document.getElementById('status-bb').textContent = '4 video 再生中 (idle 4 個も背後に)';
+  dlog('BB: 4 video 再生開始 (idle video 合計 8 個)');
+}
+
+function bbPauseAndSeek() {
+  dlog('BB: pause + seekTo (8 video) 開始 ===');
+  bbVids.forEach((v, i) => {
+    bbT0[i] = performance.now();
+    const ct = v.currentTime;
+    v.pause();
+    dlog('BB[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(bbCvs[i]));
+    v.currentTime = ct;
+    bbPaused[i] = true;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - bbT0[i]).toFixed(0);
+      dlog('BB[cam'+(i+1)+']: seeked ' + elapsed + 'ms rs=' + v.readyState);
+    });
+  });
+}
+
+async function bbAutoTest(seconds) {
+  dlog('BB: 自動テスト ' + seconds + '秒再生→pause 開始');
+  await bbPlay();
+  bbVids.forEach(v => v.currentTime = 0);
+  for (let s = seconds; s > 0; s -= 5) {
+    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
+    document.getElementById('status-bb').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
+  }
+  dlog('BB: ' + seconds + '秒経過、pause 実行');
+  bbPauseAndSeek();
+}
+
 // --- AA: 5 video + readyState ログ (本体と同じデコーダ枯渇を再現) ---
 const aaVids = [1,2,3,4,5].map(i => document.getElementById('vid-aa'+i));
 const aaCvs  = [1,2,3,4,5].map(i => document.getElementById('cvs-aa'+i));
@@ -1487,7 +1614,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
@@ -1595,6 +1722,11 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
   for (let i = 0; i < 5; i++) {
     const blob = await mp4Faststart(file);
     aaVids[i].src = URL.createObjectURL(blob);
+  }
+  // BB: 4 表示 video 初期ロード (idle 4 個は bbPlay で作る)
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(file);
+    bbVids[i].src = URL.createObjectURL(blob);
   }
 
   // V, W: 初期ロード (差し替えテスト用)
