@@ -84,11 +84,44 @@
 </head>
 <body>
   <h1>暗転切り分けテスト <span style="color:#888;font-size:12px" id="build-time"></span></h1>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 03:21)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:32)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- Y: seeked 遅延 + drawImage 輝度測定 (本体ログ再現) -->
+    <div class="test-row" style="border-color:#ff0">
+      <div class="test-header">
+        <span class="test-label" style="color:#ff0">Y: seeked 遅延 + 輝度測定</span>
+        <span class="test-desc">pause + currentTime 再セット → seeked タイミング記録 → drawImage 後の輝度を測定</span>
+        <span class="test-status" id="status-y"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-y1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-y1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-y2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-y2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-y3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-y3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-y4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-y4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="yPlay()">4 video 再生</button>
+        <button onclick="yPauseAndSeek()">一時停止 + seekTo + 輝度測定</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- V: src を複数回差し替え後に pause -->
     <div class="test-row">
       <div class="test-header">
@@ -774,6 +807,65 @@ function stopRvfc(video) {
   }
 }
 
+// --- Y: seeked 遅延 + 輝度測定 (本体ログの再現) ---
+const yVids = [1,2,3,4].map(i => document.getElementById('vid-y'+i));
+const yCvs  = [1,2,3,4].map(i => document.getElementById('cvs-y'+i));
+
+function measureBrightness(canvas) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || canvas.width === 0) return -1;
+  const sx = Math.max(0, Math.floor(canvas.width/2 - 50));
+  const sy = Math.max(0, Math.floor(canvas.height/2 - 50));
+  const sw = Math.min(100, canvas.width);
+  const sh = Math.min(100, canvas.height);
+  const d = ctx.getImageData(sx, sy, sw, sh).data;
+  let total = 0;
+  for (let i = 0; i < d.length; i += 4) total += d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+  return Math.round(total / (d.length / 4));
+}
+
+async function yPlay() {
+  const s = document.getElementById('status-y');
+  s.textContent = 'src 差し替え中...';
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(currentFile);
+    yVids[i].src = URL.createObjectURL(blob);
+  }
+  await Promise.all(yVids.map(v => new Promise(r => {
+    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
+  })));
+  yVids.forEach((v, i) => { v.play(); startRvfc(v, yCvs[i]); });
+  s.textContent = '4 video 再生中';
+  dlog('Y: 4 video 再生開始');
+}
+
+function yPauseAndSeek() {
+  dlog('Y: pause + seekTo + 輝度測定 開始 ===');
+  yVids.forEach((v, i) => {
+    const camName = 'cam' + (i+1);
+    v.pause();
+    stopRvfc(v);
+    const t0 = performance.now();
+    const ct = v.currentTime;
+    const beforeB = measureBrightness(yCvs[i]);
+    dlog('Y[' + camName + ']: pause 直後 brightness=' + beforeB + ' ct=' + ct.toFixed(3));
+    v.currentTime = ct;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - t0).toFixed(0);
+      const ctx = yCvs[i].getContext('2d');
+      if (v.videoWidth > 0) {
+        if (yCvs[i].width !== v.videoWidth || yCvs[i].height !== v.videoHeight) {
+          yCvs[i].width = v.videoWidth; yCvs[i].height = v.videoHeight;
+        }
+        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
+      }
+      const afterB = measureBrightness(yCvs[i]);
+      dlog('Y[' + camName + ']: seeked 後 (' + elapsed + 'ms 経過) drawImage→ brightness=' + afterB + (afterB <= 5 ? ' ★暗転!' : ''));
+    });
+  });
+}
+
 // --- V: src を複数回差し替え (セグメント切替再現) ---
 async function swapSrc(video, canvas, statusId) {
   const oldUrl = video.src;
@@ -1165,7 +1257,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
