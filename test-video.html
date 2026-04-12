@@ -84,7 +84,18 @@
 </head>
 <body>
   <h1>暗転切り分けテスト <span style="color:#888;font-size:12px" id="build-time"></span></h1>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:32)';</script>
+  <div style="position:fixed;bottom:8px;right:8px;z-index:9999;display:flex;gap:4px">
+    <button onclick="copyDlog()" style="padding:4px 10px;font-size:11px;background:rgba(0,0,0,0.7);color:#8f8;border:1px solid #555;border-radius:4px">ログコピー</button>
+    <button onclick="dbgLog.textContent='';alert('ログクリア')" style="padding:4px 10px;font-size:11px;background:rgba(0,0,0,0.7);color:#f88;border:1px solid #555;border-radius:4px">ログクリア</button>
+  </div>
+  <script>
+    async function copyDlog() {
+      const txt = document.getElementById('dbg-log').textContent;
+      try { await navigator.clipboard.writeText(txt); alert('ログをコピーしました ('+txt.split('\n').length+'行)'); }
+      catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
+    }
+  </script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 08:39)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
@@ -824,17 +835,13 @@ function measureBrightness(canvas) {
   return Math.round(total / (d.length / 4));
 }
 
-async function yPlay() {
+function yPlay() {
+  // 初期ロードで src は既にセット済み。play() だけ呼ぶ (autoplay policy 回避)
   const s = document.getElementById('status-y');
-  s.textContent = 'src 差し替え中...';
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(currentFile);
-    yVids[i].src = URL.createObjectURL(blob);
-  }
-  await Promise.all(yVids.map(v => new Promise(r => {
-    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
-  })));
-  yVids.forEach((v, i) => { v.play(); startRvfc(v, yCvs[i]); });
+  yVids.forEach((v, i) => {
+    v.play().then(() => dlog('Y[cam'+(i+1)+']: play() resolved')).catch(e => dlog('Y[cam'+(i+1)+']: play() error: '+e.message));
+    startRvfc(v, yCvs[i]);
+  });
   s.textContent = '4 video 再生中';
   dlog('Y: 4 video 再生開始');
 }
@@ -1353,6 +1360,12 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     v.src = URL.createObjectURL(file);
     startCanvasLoop(v, pCvs[i]);
   });
+
+  // Y: 4 video 初期ロード (yPlay で即 play() できるように)
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(file);
+    yVids[i].src = URL.createObjectURL(blob);
+  }
 
   // V, W: 初期ロード (差し替えテスト用)
   for (const id of ['v','w']) {
