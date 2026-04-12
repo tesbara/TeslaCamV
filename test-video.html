@@ -166,6 +166,87 @@
         <button onclick="ve.pause()">一時停止</button>
       </div>
     </div>
+
+    <!-- F: 4つ同時再生 (素の video) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">F: 4 video 同時 (素)</span>
+        <span class="test-desc">同じ動画を 4 つの video 要素で同時再生・一時停止</span>
+        <span class="test-status" id="status-f"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9"><video id="video-f1" playsinline muted></video></div>
+        <div class="test-body" style="aspect-ratio:16/9"><video id="video-f2" playsinline muted></video></div>
+        <div class="test-body" style="aspect-ratio:16/9"><video id="video-f3" playsinline muted></video></div>
+        <div class="test-body" style="aspect-ratio:16/9"><video id="video-f4" playsinline muted></video></div>
+      </div>
+      <div class="btns">
+        <button onclick="fAll('play')">全て再生</button>
+        <button onclick="fAll('pause')">全て一時停止</button>
+      </div>
+    </div>
+
+    <!-- G: 4つ同時 + Canvas のみ (video 非表示) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">G: 4 video 同時 + Canvas のみ</span>
+        <span class="test-desc">4 つの video (非表示) + Canvas 転写を同時再生・一時停止</span>
+        <span class="test-status" id="status-g"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-g1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-g1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-g2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-g2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-g3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-g3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-g4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-g4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="gAll('play')">全て再生</button>
+        <button onclick="gAll('pause')">全て一時停止</button>
+      </div>
+    </div>
+
+    <!-- H: 4つ同時 + mp4Faststart + Canvas のみ (TeslaCamV フル再現) -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">H: 4 video + mp4Faststart + Canvas</span>
+        <span class="test-desc">mp4Faststart + 4 video 非表示 + Canvas (TeslaCamV に最も近い構成)</span>
+        <span class="test-status" id="status-h"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-h1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-h1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-h2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-h2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-h3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-h3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="video-h4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="canvas-h4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="hAll('play')">全て再生</button>
+        <button onclick="hAll('pause')">全て一時停止</button>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -327,13 +408,28 @@ const vc = document.getElementById('video-c');
 const vd = document.getElementById('video-d');
 const ve = document.getElementById('video-e');
 
+// F: 4 video 同時
+const fVideos = [1,2,3,4].map(i => document.getElementById('video-f'+i));
+function fAll(action) { fVideos.forEach(v => v[action]()); }
+
+// G: 4 video + Canvas
+const gVideos = [1,2,3,4].map(i => document.getElementById('video-g'+i));
+function gAll(action) { gVideos.forEach(v => v[action]()); }
+
+// H: 4 video + mp4Faststart + Canvas
+const hVideos = [1,2,3,4].map(i => document.getElementById('video-h'+i));
+function hAll(action) { hVideos.forEach(v => v[action]()); }
+
 // ステータス表示
-['a','b','c','d','e'].forEach(id => {
-  const v = document.getElementById('video-' + id);
+['a','b','c','d','e','f','g','h'].forEach(id => {
+  // F,G,H は最初の video のイベントでステータス表示
+  const v = document.getElementById('video-' + id) || document.getElementById('video-' + id + '1');
   const s = document.getElementById('status-' + id);
-  v.addEventListener('play', () => s.textContent = '再生中');
-  v.addEventListener('pause', () => s.textContent = '一時停止');
-  v.addEventListener('ended', () => s.textContent = '再生完了');
+  if (v && s) {
+    v.addEventListener('play', () => s.textContent = '再生中');
+    v.addEventListener('pause', () => s.textContent = '一時停止');
+    v.addEventListener('ended', () => s.textContent = '再生完了');
+  }
 });
 
 document.getElementById('file-input').addEventListener('change', async (e) => {
@@ -343,33 +439,46 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
   document.getElementById('tests').style.display = 'block';
 
   // A: 素の video
-  const urlA = URL.createObjectURL(file);
-  va.src = urlA;
+  va.src = URL.createObjectURL(file);
 
   // B: mp4Faststart (Blob URL)
   document.getElementById('status-b').textContent = '処理中...';
   const blobB = await mp4Faststart(file);
-  const urlB = URL.createObjectURL(blobB);
-  vb.src = urlB;
+  vb.src = URL.createObjectURL(blobB);
   document.getElementById('status-b').textContent = '準備完了';
 
   // C: Canvas 転写 (video 可視)
-  const urlC = URL.createObjectURL(file);
-  vc.src = urlC;
+  vc.src = URL.createObjectURL(file);
   startCanvasLoop(vc, document.getElementById('canvas-c'));
 
   // D: Canvas のみ (video 非表示)
-  const urlD = URL.createObjectURL(file);
-  vd.src = urlD;
+  vd.src = URL.createObjectURL(file);
   startCanvasLoop(vd, document.getElementById('canvas-d'));
 
   // E: mp4Faststart + Canvas のみ (フル再現)
   document.getElementById('status-e').textContent = '処理中...';
   const blobE = await mp4Faststart(file);
-  const urlE = URL.createObjectURL(blobE);
-  ve.src = urlE;
+  ve.src = URL.createObjectURL(blobE);
   startCanvasLoop(ve, document.getElementById('canvas-e'));
   document.getElementById('status-e').textContent = '準備完了';
+
+  // F: 4 video 同時 (素)
+  fVideos.forEach(v => { v.src = URL.createObjectURL(file); });
+
+  // G: 4 video + Canvas (video 非表示)
+  gVideos.forEach((v, i) => {
+    v.src = URL.createObjectURL(file);
+    startCanvasLoop(v, document.getElementById('canvas-g' + (i+1)));
+  });
+
+  // H: 4 video + mp4Faststart + Canvas (TeslaCamV フル再現)
+  document.getElementById('status-h').textContent = '処理中...';
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(file);
+    hVideos[i].src = URL.createObjectURL(blob);
+    startCanvasLoop(hVideos[i], document.getElementById('canvas-h' + (i+1)));
+  }
+  document.getElementById('status-h').textContent = '準備完了';
 });
 </script>
 </body>
