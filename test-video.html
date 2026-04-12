@@ -84,11 +84,97 @@
 </head>
 <body>
   <h1>暗転切り分けテスト <span style="color:#888;font-size:12px" id="build-time"></span></h1>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 02:59)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 03:08)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- Q: src 差し替え後に pause -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">Q: src 差し替え後に pause</span>
+        <span class="test-desc">Blob URL → 再生 → 同じファイルで新 Blob URL に差し替え → 再生 → 一時停止</span>
+        <span class="test-status" id="status-q"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-q" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-q"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="qSwapAndPlay()">src 差し替え+再生</button>
+        <button onclick="V.q.pause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- R: rVFC 停止型 -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">R: rVFC 停止型 Canvas</span>
+        <span class="test-desc">再生中は rVFC で転写。pause で rVFC 停止 → seeked で 1 回だけキャプチャ</span>
+        <span class="test-status" id="status-r"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-r" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-r"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="rPlay()">再生</button>
+        <button onclick="rPause()">一時停止</button>
+      </div>
+    </div>
+
+    <!-- S: フル再現 -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">S: フル再現</span>
+        <span class="test-desc">src 差し替え→再生→pause→rVFC停止→clearRect→visibility hidden→seeked→visible+drawImage</span>
+        <span class="test-status" id="status-s"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-s" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-s"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="sSwapAndPlay()">src 差し替え+再生</button>
+        <button onclick="sPause()">一時停止 (full)</button>
+      </div>
+    </div>
+
+    <!-- T: 全部入り x4 -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">T: 全部入り x4</span>
+        <span class="test-desc">4 video 同時。src 差し替え+rVFC 停止+clearRect+visibility 切替+seeked+drawImage</span>
+        <span class="test-status" id="status-t"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-t1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-t1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-t2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-t2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-t3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-t3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-t4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-t4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="tSwapAndPlay()">全 src 差し替え+再生</button>
+        <button onclick="tPause()">全て一時停止 (full)</button>
+      </div>
+    </div>
+
+    <div id="dbg-log" style="margin:8px 0;padding:6px;background:#111;border-radius:4px;font-size:10px;color:#8f8;max-height:150px;overflow-y:auto;white-space:pre-wrap;display:none"></div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- A -->
     <div class="test-row">
       <div class="test-header">
@@ -579,6 +665,155 @@ function pauseReseekCapture(video, canvas, statusId) {
 
 function multiAll(vids, action) { vids.forEach(v => v[action]()); }
 
+// デバッグログ
+const dbgLog = document.getElementById('dbg-log');
+function dlog(msg) {
+  dbgLog.style.display = 'block';
+  const now = new Date().toLocaleTimeString('ja-JP', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits:3});
+  dbgLog.textContent = now + ' ' + msg + '\n' + dbgLog.textContent;
+}
+
+// rVFC 停止可能版
+const rvfcHandles = new Map();
+function startRvfc(video, canvas) {
+  stopRvfc(video);
+  const ctx = canvas.getContext('2d');
+  function draw() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    if ('requestVideoFrameCallback' in video) {
+      rvfcHandles.set(video, video.requestVideoFrameCallback(draw));
+    } else {
+      rvfcHandles.set(video, requestAnimationFrame(draw));
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    rvfcHandles.set(video, video.requestVideoFrameCallback(draw));
+  } else {
+    rvfcHandles.set(video, requestAnimationFrame(draw));
+  }
+}
+function stopRvfc(video) {
+  const h = rvfcHandles.get(video);
+  if (h != null) {
+    if ('requestVideoFrameCallback' in video) video.cancelVideoFrameCallback(h);
+    else cancelAnimationFrame(h);
+    rvfcHandles.delete(video);
+  }
+}
+
+// --- Q: src 差し替え後に pause ---
+async function qSwapAndPlay() {
+  dlog('Q: src 差し替え');
+  const blob = await mp4Faststart(currentFile);
+  V.q.src = URL.createObjectURL(blob);
+  V.q.addEventListener('loadeddata', function once() {
+    V.q.removeEventListener('loadeddata', once);
+    V.q.play();
+    startRvfc(V.q, document.getElementById('cvs-q'));
+    dlog('Q: 再生開始');
+  });
+}
+
+// --- R: rVFC 停止型 ---
+function rPlay() {
+  V.r.play();
+  startRvfc(V.r, document.getElementById('cvs-r'));
+  dlog('R: 再生 (rVFC 開始)');
+}
+function rPause() {
+  V.r.pause();
+  stopRvfc(V.r);
+  dlog('R: pause + rVFC 停止');
+  const t = V.r.currentTime;
+  V.r.currentTime = t;
+  V.r.addEventListener('seeked', function once() {
+    V.r.removeEventListener('seeked', once);
+    const cvs = document.getElementById('cvs-r');
+    const ctx = cvs.getContext('2d');
+    if (V.r.videoWidth > 0) ctx.drawImage(V.r, 0, 0, V.r.videoWidth, V.r.videoHeight);
+    dlog('R: seeked 後キャプチャ');
+  });
+}
+
+// --- S: フル再現 ---
+async function sSwapAndPlay() {
+  dlog('S: src 差し替え');
+  const blob = await mp4Faststart(currentFile);
+  V.s.src = URL.createObjectURL(blob);
+  V.s.addEventListener('loadeddata', function once() {
+    V.s.removeEventListener('loadeddata', once);
+    V.s.play();
+    startRvfc(V.s, document.getElementById('cvs-s'));
+    dlog('S: 再生開始');
+  });
+}
+function sPause() {
+  V.s.pause();
+  stopRvfc(V.s);
+  const cvs = document.getElementById('cvs-s');
+  const ctx = cvs.getContext('2d');
+  if (cvs.width > 0) ctx.clearRect(0, 0, cvs.width, cvs.height);
+  V.s.style.visibility = 'hidden';
+  dlog('S: pause + rVFC停止 + clearRect + visibility=hidden');
+  const t = V.s.currentTime;
+  V.s.currentTime = t;
+  V.s.addEventListener('seeked', function once() {
+    V.s.removeEventListener('seeked', once);
+    V.s.style.visibility = 'visible';
+    if (V.s.videoWidth > 0) {
+      if (cvs.width !== V.s.videoWidth || cvs.height !== V.s.videoHeight) {
+        cvs.width = V.s.videoWidth; cvs.height = V.s.videoHeight;
+      }
+      ctx.drawImage(V.s, 0, 0, V.s.videoWidth, V.s.videoHeight);
+    }
+    dlog('S: seeked → visible + drawImage');
+  });
+}
+
+// --- T: 全部入り x4 ---
+const tVids = [1,2,3,4].map(i => document.getElementById('vid-t'+i));
+const tCvs  = [1,2,3,4].map(i => document.getElementById('cvs-t'+i));
+async function tSwapAndPlay() {
+  dlog('T: 4 video src 差し替え');
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(currentFile);
+    tVids[i].src = URL.createObjectURL(blob);
+  }
+  await Promise.all(tVids.map(v => new Promise(r => {
+    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
+  })));
+  tVids.forEach((v, i) => { v.play(); startRvfc(v, tCvs[i]); });
+  dlog('T: 全再生開始');
+}
+function tPause() {
+  dlog('T: 全 pause 開始');
+  tVids.forEach((v, i) => {
+    v.pause();
+    stopRvfc(v);
+    const ctx = tCvs[i].getContext('2d');
+    if (tCvs[i].width > 0) ctx.clearRect(0, 0, tCvs[i].width, tCvs[i].height);
+    v.style.visibility = 'hidden';
+    const t = v.currentTime;
+    v.currentTime = t;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      v.style.visibility = 'visible';
+      if (v.videoWidth > 0) {
+        if (tCvs[i].width !== v.videoWidth || tCvs[i].height !== v.videoHeight) {
+          tCvs[i].width = v.videoWidth; tCvs[i].height = v.videoHeight;
+        }
+        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
+      }
+      dlog('T['+i+']: seeked → visible + drawImage');
+    });
+  });
+}
+
 // M: pause → canvas を clearRect (黒) → currentTime 再セット → seeked で drawImage
 // TeslaCamV の clearCapturedFrame → seekTo → seeked → captureFrame の流れを再現
 function pauseClearReseekCapture(video, canvas, statusId) {
@@ -678,7 +913,8 @@ pauseClearReseekCapture = function(video, canvas, statusId) {
 // 要素取得
 // =====================================================================
 const V = {};
-['a','b','c','d','e','f','g','h','i','m','n','o'].forEach(id => { V[id] = document.getElementById('vid-' + id); });
+let currentFile = null;
+['a','b','c','d','e','f','g','h','i','m','n','o','q','r','s'].forEach(id => { V[id] = document.getElementById('vid-' + id); });
 
 const jVids = [1,2,3,4].map(i => document.getElementById('vid-j'+i));
 const kVids = [1,2,3,4].map(i => document.getElementById('vid-k'+i));
@@ -687,7 +923,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
@@ -703,6 +939,7 @@ const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 document.getElementById('file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  currentFile = file;
   document.getElementById('file-select').style.display = 'none';
   document.getElementById('tests').style.display = 'block';
 
@@ -782,6 +1019,19 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     v.src = URL.createObjectURL(file);
     startCanvasLoop(v, pCvs[i]);
   });
+
+  // Q〜T: mp4Faststart で初期ロード
+  for (const id of ['q','r','s']) {
+    const blob = await mp4Faststart(file);
+    V[id].src = URL.createObjectURL(blob);
+    startRvfc(V[id], document.getElementById('cvs-' + id));
+  }
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(file);
+    tVids[i].src = URL.createObjectURL(blob);
+    startRvfc(tVids[i], tCvs[i]);
+  }
+  dlog('Q〜T 初期ロード完了');
 });
 </script>
 </body>
