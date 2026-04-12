@@ -95,7 +95,7 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:05)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:15)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
@@ -132,6 +132,8 @@
       <div class="btns">
         <button onclick="aaPlay()">5 video 再生</button>
         <button onclick="aaPauseAndSeek()">一時停止 + seekTo (rVFC継続)</button>
+        <button onclick="aaAutoTest(30)">自動: 30秒再生→pause</button>
+        <button onclick="aaAutoTest(60)">自動: 60秒再生→pause</button>
       </div>
     </div>
 
@@ -934,6 +936,25 @@ function aaPlay() {
   });
   document.getElementById('status-aa').textContent = '5 video 再生中';
   dlog('AA: 5 video 再生開始');
+}
+
+async function aaAutoTest(seconds) {
+  dlog('AA: 自動テスト ' + seconds + '秒再生→pause 開始');
+  aaPaused.fill(false);
+  aaVids.forEach((v, i) => {
+    v.currentTime = 0;
+    v.play().catch(e => dlog('AA[cam'+(i+1)+']: play() error: '+e.message));
+    startRvfcWithReadyState(v, aaCvs[i], i, 'AA');
+  });
+  document.getElementById('status-aa').textContent = seconds + '秒再生中...';
+  // 指定秒数待つ (実時間で)
+  for (let s = seconds; s > 0; s -= 5) {
+    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
+    document.getElementById('status-aa').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
+  }
+  dlog('AA: ' + seconds + '秒経過、pause 実行');
+  document.getElementById('status-aa').textContent = '一時停止 + seekTo 実行';
+  aaPauseAndSeek();
 }
 
 function aaPauseAndSeek() {
