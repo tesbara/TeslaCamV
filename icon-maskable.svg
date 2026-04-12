@@ -2,11 +2,11 @@
   <!-- maskable アイコン用: 端まで塗りつぶし背景 + 青基調ダッシュカム + 赤レンズ -->
   <rect width="512" height="512" fill="#080d18"/>
   <!-- ダッシュカム筐体 (中央 80% 安全領域内に配置、1.5px 分上にずらし相当) -->
-  <rect x="56" y="150" width="400" height="204" rx="36" fill="#080d18" stroke="#3b82f6" stroke-width="16"/>
+  <rect x="56" y="138" width="400" height="204" rx="36" fill="#080d18" stroke="#3b82f6" stroke-width="16"/>
   <!-- レンズ -->
-  <circle cx="256" cy="252" r="70" fill="#cc0000" stroke="#60a5fa" stroke-width="12"/>
-  <circle cx="256" cy="252" r="36" fill="#990000"/>
-  <circle cx="256" cy="252" r="12" fill="#1a0505"/>
+  <circle cx="256" cy="240" r="70" fill="#cc0000" stroke="#60a5fa" stroke-width="12"/>
+  <circle cx="256" cy="240" r="36" fill="#990000"/>
+  <circle cx="256" cy="240" r="12" fill="#1a0505"/>
   <!-- 録画インジケーター -->
-  <circle cx="400" cy="190" r="20" fill="#ef4444"/>
+  <circle cx="400" cy="178" r="20" fill="#ef4444"/>
 </svg>
