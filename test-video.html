@@ -84,7 +84,7 @@
 </head>
 <body>
   <h1>暗転切り分けテスト <span style="color:#888;font-size:12px" id="build-time"></span></h1>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 21:55)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 22:10)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
@@ -313,6 +313,89 @@
         <button onclick="multiAll(lVids,'pause')">全て一時停止</button>
       </div>
     </div>
+
+    <!-- M -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">M: clearRect→seeked→drawImage (video 非表示)</span>
+        <span class="test-desc">pause 時に canvas を黒クリア → currentTime 再セット → seeked で drawImage</span>
+        <span class="test-status" id="status-m"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-m" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-m"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="V.m.play()">再生</button>
+        <button onclick="pauseClearReseekCapture(V.m, document.getElementById('cvs-m'), 'status-m')">一時停止 (clear→seeked→capture)</button>
+      </div>
+    </div>
+
+    <!-- N -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">N: 1秒遅延 drawImage (video 非表示)</span>
+        <span class="test-desc">pause 後 1 秒待ってから video→canvas に drawImage (デコーダ解放後)</span>
+        <span class="test-status" id="status-n"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-n" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-n"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="V.n.play()">再生</button>
+        <button onclick="pauseDelayedCapture(V.n, document.getElementById('cvs-n'), 'status-n', 1000)">一時停止 (1秒後キャプチャ)</button>
+        <button onclick="pauseDelayedCapture(V.n, document.getElementById('cvs-n'), 'status-n', 2000)">一時停止 (2秒後キャプチャ)</button>
+      </div>
+    </div>
+
+    <!-- O -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">O: clearRect→1秒遅延→seeked→drawImage</span>
+        <span class="test-desc">pause 時に canvas 黒クリア → 1 秒待機 → currentTime 再セット → seeked で drawImage</span>
+        <span class="test-status" id="status-o"></span>
+      </div>
+      <div class="test-body">
+        <video id="vid-o" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-o"></canvas>
+      </div>
+      <div class="btns">
+        <button onclick="V.o.play()">再生</button>
+        <button onclick="pauseClearDelayReseekCapture(V.o, document.getElementById('cvs-o'), 'status-o')">一時停止 (clear→1秒→seeked→capture)</button>
+      </div>
+    </div>
+
+    <!-- P -->
+    <div class="test-row">
+      <div class="test-header">
+        <span class="test-label">P: 4 video + clearRect→seeked→drawImage</span>
+        <span class="test-desc">4 video 同時 + pause 時 clear→seeked→drawImage (TeslaCamV フル再現)</span>
+        <span class="test-status" id="status-p"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-p1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-p1"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-p2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-p2"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-p3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-p3"></canvas>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-p4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-p4"></canvas>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="multiAll(pVids,'play')">全て再生</button>
+        <button onclick="pauseClearReseekCaptureMulti(pVids, pCvs, 'status-p')">全て一時停止 (clear→seeked→capture)</button>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -496,18 +579,115 @@ function pauseReseekCapture(video, canvas, statusId) {
 
 function multiAll(vids, action) { vids.forEach(v => v[action]()); }
 
+// M: pause → canvas を clearRect (黒) → currentTime 再セット → seeked で drawImage
+// TeslaCamV の clearCapturedFrame → seekTo → seeked → captureFrame の流れを再現
+function pauseClearReseekCapture(video, canvas, statusId) {
+  video.pause();
+  const ctx = canvas.getContext('2d');
+  // canvas を黒クリア (TeslaCamV の clearCapturedFrame 相当)
+  if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const t = video.currentTime;
+  video.currentTime = t;
+  const s = document.getElementById(statusId);
+  s.textContent = 'clear済み、seeked 待ち... (t=' + t.toFixed(2) + ')';
+  video.addEventListener('seeked', function onSeeked() {
+    video.removeEventListener('seeked', onSeeked);
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    s.textContent = 'clear→seeked→capture 完了 (t=' + t.toFixed(2) + ')';
+  });
+}
+
+// N: pause → 指定ミリ秒待ってから drawImage (デコーダのフレームバッファ解放後を狙う)
+function pauseDelayedCapture(video, canvas, statusId, delayMs) {
+  video.pause();
+  const s = document.getElementById(statusId);
+  s.textContent = '一時停止、' + delayMs + 'ms 待機中...';
+  setTimeout(() => {
+    const ctx = canvas.getContext('2d');
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    s.textContent = delayMs + 'ms 後キャプチャ完了 (t=' + video.currentTime.toFixed(2) + ')';
+  }, delayMs);
+}
+
+// O: pause → canvas クリア → 1秒待機 → currentTime 再セット → seeked で drawImage
+function pauseClearDelayReseekCapture(video, canvas, statusId) {
+  video.pause();
+  const ctx = canvas.getContext('2d');
+  if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const s = document.getElementById(statusId);
+  s.textContent = 'clear済み、1秒待機中...';
+  setTimeout(() => {
+    const t = video.currentTime;
+    video.currentTime = t;
+    s.textContent = '1秒後 seeked 待ち... (t=' + t.toFixed(2) + ')';
+    video.addEventListener('seeked', function onSeeked() {
+      video.removeEventListener('seeked', onSeeked);
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      }
+      s.textContent = 'clear→1秒→seeked→capture 完了 (t=' + t.toFixed(2) + ')';
+    });
+  }, 1000);
+}
+
+// P: 4 video 同時版の clear→seeked→drawImage
+function pauseClearReseekCaptureMulti(vids, canvases, statusId) {
+  vids.forEach((v, i) => pauseClearReseekCapture(v, canvases[i], i === 0 ? statusId : null));
+}
+// statusId が null の場合にも対応するよう修正
+const origPauseClearReseekCapture = pauseClearReseekCapture;
+pauseClearReseekCapture = function(video, canvas, statusId) {
+  if (!statusId) {
+    // statusId なしの場合は status 表示をスキップ
+    video.pause();
+    const ctx = canvas.getContext('2d');
+    if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const t = video.currentTime;
+    video.currentTime = t;
+    video.addEventListener('seeked', function onSeeked() {
+      video.removeEventListener('seeked', onSeeked);
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        }
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      }
+    });
+    return;
+  }
+  origPauseClearReseekCapture(video, canvas, statusId);
+};
+
 // =====================================================================
 // 要素取得
 // =====================================================================
 const V = {};
-['a','b','c','d','e','f','g','h','i'].forEach(id => { V[id] = document.getElementById('vid-' + id); });
+['a','b','c','d','e','f','g','h','i','m','n','o'].forEach(id => { V[id] = document.getElementById('vid-' + id); });
 
 const jVids = [1,2,3,4].map(i => document.getElementById('vid-j'+i));
 const kVids = [1,2,3,4].map(i => document.getElementById('vid-k'+i));
 const lVids = [1,2,3,4].map(i => document.getElementById('vid-l'+i));
+const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
+const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
@@ -584,6 +764,24 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
     startCanvasLoop(lVids[i], document.getElementById('cvs-l' + (i+1)));
   }
   document.getElementById('status-l').textContent = '準備完了';
+
+  // M: clearRect → seeked → drawImage (video 非表示)
+  V.m.src = URL.createObjectURL(file);
+  startCanvasLoop(V.m, document.getElementById('cvs-m'));
+
+  // N: 遅延 drawImage (video 非表示)
+  V.n.src = URL.createObjectURL(file);
+  startCanvasLoop(V.n, document.getElementById('cvs-n'));
+
+  // O: clearRect → 1秒遅延 → seeked → drawImage (video 非表示)
+  V.o.src = URL.createObjectURL(file);
+  startCanvasLoop(V.o, document.getElementById('cvs-o'));
+
+  // P: 4 video + clearRect → seeked → drawImage
+  pVids.forEach((v, i) => {
+    v.src = URL.createObjectURL(file);
+    startCanvasLoop(v, pCvs[i]);
+  });
 });
 </script>
 </body>
