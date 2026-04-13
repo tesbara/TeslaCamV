@@ -315,37 +315,44 @@ function aPauseAndSeekDirect(deltaSec) {
   });
 }
 
-// 内部 play で復帰
+// 内部 play で復帰: seek → seeked 待ち → play → 1秒 → pause
 async function aPauseAndSeekRecover(deltaSec) {
-  dlog('A: pause+シーク (内部 play で復帰、' + (deltaSec>0?'+':'') + deltaSec + '秒)');
-  aPaused.fill(false);  // 復帰中はログを抑制
-  // 1. play() を呼んで resolved を待つ (順次)
-  for (let i = 0; i < 4; i++) {
-    if (aVids[i].paused) {
-      try { await aVids[i].play(); dlog('A[' + camNames[i] + ']: play() resolved'); }
-      catch (e) { dlog('A[' + camNames[i] + ']: play() error: ' + e.message); }
-    }
-    if (i < 3) await new Promise(r => setTimeout(r, 50));
-  }
-  // 2. currentTime をセット (順次)
+  dlog('A: pause+シーク (seek→seeked→play→1秒→pause、' + (deltaSec>0?'+':'') + deltaSec + '秒)');
+  aPaused.fill(true);
+  aVids.forEach((v, i) => { aT0[i] = performance.now(); });
+  // 1. currentTime セット → seeked 待ち (順次)
   for (let i = 0; i < 4; i++) {
     const v = aVids[i];
     const newTime = Math.max(0, v.currentTime + deltaSec);
     dlog('A[' + camNames[i] + ']: シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3));
+    const seekStart = performance.now();
     v.currentTime = newTime;
+    await new Promise(r => {
+      v.addEventListener('seeked', function once() {
+        v.removeEventListener('seeked', once);
+        dlog('A[' + camNames[i] + ']: seeked ' + (performance.now()-seekStart).toFixed(0) + 'ms ct=' + v.currentTime.toFixed(3));
+        r();
+      });
+    });
     if (i < 3) await new Promise(r => setTimeout(r, 50));
   }
-  // 3. 1.5 秒待機 (再生中シークの復帰時間)
-  await new Promise(r => setTimeout(r, 1500));
-  dlog('A: 1.5 秒経過、pause()');
+  // 2. play() (順次)
+  for (let i = 0; i < 4; i++) {
+    if (aVids[i].paused) {
+      try { await aVids[i].play(); dlog('A[' + camNames[i] + ']: play() resolved ct=' + aVids[i].currentTime.toFixed(3)); }
+      catch (e) { dlog('A[' + camNames[i] + ']: play() error: ' + e.message); }
+    }
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  // 3. 1 秒待機
+  await new Promise(r => setTimeout(r, 1000));
+  dlog('A: 1 秒経過、pause()');
   // 4. pause
   aVids.forEach((v, i) => {
     v.pause();
-    aPaused[i] = true;
-    aT0[i] = performance.now();
     dlog('A[' + camNames[i] + ']: pause 後 ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(aCvs[i]));
   });
-  document.getElementById('status-a').textContent = '内部 play 復帰後 pause';
+  document.getElementById('status-a').textContent = 'seek→play→pause 完了';
 }
 
 // =====================================================================
@@ -394,7 +401,7 @@ async function bSeek(deltaSec, intervalMs) {
   }
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 11:55)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 12:10)';
 </script>
 </body>
 </html>
