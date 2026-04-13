@@ -78,6 +78,11 @@
         <span style="font-size:11px;color:#888;align-self:center">▼ 位置変動 (開始位置を変えて暗転する位置があるか見る)</span>
         <button onclick="cPositionTest([0, 5, 10, 20, 40])">位置=[0,5,10,20,40]秒</button>
       </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ brightness 時系列 (再生開始直後から 3 秒間、100ms 毎に記録)</span>
+        <button onclick="cBrightnessTrace(3000, 100)">brightness推移 3秒</button>
+        <button onclick="cBrightnessTrace(5000, 100)">brightness推移 5秒</button>
+      </div>
     </div>
 
     <!-- A: pause+シーク (内部 play で復帰) -->
@@ -226,6 +231,7 @@ async function copyDlog() {
 function measureBrightness(canvas) {
   const ctx = canvas.getContext('2d');
   if (!ctx || canvas.width === 0) return -1;
+  // 中央 100x100 のサンプル (中央だけが偶然明るい/暗いを避けるため広めに取る)
   const sx = Math.max(0, Math.floor(canvas.width/2 - 50));
   const sy = Math.max(0, Math.floor(canvas.height/2 - 50));
   const sw = Math.min(100, canvas.width);
@@ -234,6 +240,23 @@ function measureBrightness(canvas) {
   let total = 0;
   for (let i = 0; i < d.length; i += 4) total += d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
   return Math.round(total / (d.length / 4));
+}
+
+// canvas 全体の平均輝度。画面全体が薄暗い (= ユーザーが言う「暗転」) 状態を検出しやすい。
+function measureBrightnessFull(canvas) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || canvas.width === 0) return -1;
+  // サンプリング: canvas 全体を 1/4 ずつ取って計算 (処理量を減らす)
+  const w = canvas.width, h = canvas.height;
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let total = 0;
+  const step = 16;  // 16 ピクセルごとにサンプル
+  let count = 0;
+  for (let i = 0; i < d.length; i += 4 * step) {
+    total += d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    count++;
+  }
+  return count > 0 ? Math.round(total / count) : -1;
 }
 
 // =====================================================================
@@ -624,6 +647,63 @@ async function cRepeatTest(mode, pauseDelayMs, count) {
   document.getElementById('status-c').textContent = '連続テスト完了';
 }
 
+// brightness 時系列トレース: 再生開始から指定時間、brightness を intervalMs 毎に記録
+async function cBrightnessTrace(durationMs, intervalMs) {
+  dlog('======= C: brightness 時系列 ' + durationMs + 'ms @' + intervalMs + 'ms 開始 =======');
+  // リセット
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  for (let i = 0; i < 4; i++) cVids[i].currentTime = 0;
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 1500);
+  })));
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  // 再生開始 (50ms 順次)
+  const playStart = performance.now();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  dlog('C: play 4 video 発行完了 (累積 150ms)');
+  // brightness を記録
+  const traces = [[],[],[],[]];  // [cam][{t, ct, bCenter, bFull}]
+  const traceStart = performance.now();
+  const traceEnd = traceStart + durationMs;
+  while (performance.now() < traceEnd) {
+    const elapsed = Math.round(performance.now() - playStart);
+    for (let i = 0; i < 4; i++) {
+      traces[i].push({
+        t: elapsed,
+        ct: cVids[i].currentTime,
+        bCenter: measureBrightness(cCvs[i]),
+        bFull: measureBrightnessFull(cCvs[i]),
+      });
+    }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  // pause
+  cVids.forEach(v => v.pause());
+  // ログ出力 (各カメラ)
+  for (let i = 0; i < 4; i++) {
+    dlog('--- C[' + camNames[i] + '] 時系列 ---');
+    for (const s of traces[i]) {
+      dlog('  t=' + s.t + 'ms ct=' + s.ct.toFixed(3) + ' bCenter=' + s.bCenter + ' bFull=' + s.bFull);
+    }
+  }
+  // サマリ: 各カメラで bFull が最終値の 80% に達した最初の時刻
+  for (let i = 0; i < 4; i++) {
+    const tr = traces[i];
+    const finalB = tr[tr.length - 1].bFull;
+    const threshold = finalB * 0.8;
+    const firstNormal = tr.find(s => s.bFull >= threshold);
+    dlog('C[' + camNames[i] + '] サマリ: 最終 bFull=' + finalB + '、80% (' + threshold.toFixed(0) + ') 到達: ' + (firstNormal ? firstNormal.t + 'ms' : '未到達'));
+  }
+  dlog('======= C: brightness 時系列終了 =======');
+  document.getElementById('status-c').textContent = 'brightness 推移完了';
+}
+
 // 位置変動テスト: 再生開始位置を変えて毎回の brightness を記録
 async function cPositionTest(positions) {
   dlog('======= C: 位置変動テスト positions=[' + positions.join(',') + '] 開始 =======');
@@ -662,7 +742,7 @@ async function cPositionTest(positions) {
   document.getElementById('status-c').textContent = '位置変動テスト完了';
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 12:15)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 12:30)';
 </script>
 </body>
 </html>
