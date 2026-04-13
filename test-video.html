@@ -44,6 +44,19 @@
 
   <div id="tests">
 
+    <!-- G: 網羅的自動テスト (ct 有無 × 単一/複数動画 × 3 回) -->
+    <div class="test-row" style="border-color:#f00">
+      <div class="test-header">
+        <span class="test-label" style="color:#f00">G: 網羅的自動テスト (4 パターン × 3 回)</span>
+        <span class="test-desc">[ct 触らず play / ct=10 セット→play] × [1 video / 4 video] × 3 回。各テストで 3 秒間の brightness 推移を記録</span>
+        <span class="test-status" id="status-g"></span>
+      </div>
+      <div class="test-body" style="max-width:360px"><video id="vid-g" playsinline muted style="visibility:hidden"></video><canvas id="cvs-g"></canvas><div class="cam-label">測定用 (1 video の時)</div></div>
+      <div class="btns">
+        <button onclick="gRunAll()">網羅テスト実行 (約 1 分)</button>
+      </div>
+    </div>
+
     <!-- F: 1 video のみで currentTime セット → play の brightness 推移 -->
     <div class="test-row" style="border-color:#ff8">
       <div class="test-header">
@@ -823,6 +836,175 @@ async function cPositionTest(positions) {
 }
 
 // =====================================================================
+// G: 網羅的自動テスト (4 パターン × 3 回)
+// =====================================================================
+const gVid = document.getElementById('vid-g');
+const gCvs = document.getElementById('cvs-g');
+let gRvfcStarted = false;
+let gFileLoaded = false;
+
+function ensureGRvfc() {
+  if (gRvfcStarted) return;
+  const ctx = gCvs.getContext('2d');
+  function loop() {
+    if (gVid.videoWidth > 0 && gVid.videoHeight > 0) {
+      if (gCvs.width !== gVid.videoWidth || gCvs.height !== gVid.videoHeight) {
+        gCvs.width = gVid.videoWidth; gCvs.height = gVid.videoHeight;
+      }
+      ctx.drawImage(gVid, 0, 0, gVid.videoWidth, gVid.videoHeight);
+    }
+    if ('requestVideoFrameCallback' in gVid) gVid.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in gVid) gVid.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+  gRvfcStarted = true;
+}
+
+async function ensureGFile() {
+  if (gFileLoaded) return;
+  if (!files[0]) throw new Error('no file');
+  const blob = await mp4Faststart(files[0]);
+  gVid.src = URL.createObjectURL(blob);
+  await new Promise(r => {
+    gVid.addEventListener('loadeddata', function once() { gVid.removeEventListener('loadeddata', once); r(); });
+    setTimeout(r, 3000);
+  });
+  gFileLoaded = true;
+}
+
+// 3 秒間の brightness 推移を記録して、「回復したか」を判定する共通ルーチン
+async function gMeasureTrace(playStart, vid, cvs, label) {
+  const trace = [];
+  const endTime = performance.now() + 3000;
+  while (performance.now() < endTime) {
+    const elapsed = Math.round(performance.now() - playStart);
+    trace.push({
+      t: elapsed,
+      ct: vid.currentTime,
+      b: measureBrightnessFull(cvs),
+    });
+    await new Promise(r => setTimeout(r, 100));
+  }
+  vid.pause();
+  // サマリ: 最終 b、最大 b、最終の 80% 到達時刻、暗転継続の有無
+  const finalB = trace[trace.length - 1].b;
+  const maxB = Math.max(...trace.map(s => s.b));
+  const threshold = Math.max(20, maxB * 0.5); // 最大値の半分 (or 20) を回復基準とする
+  const firstRecover = trace.find(s => s.b >= threshold);
+  const last1sMin = Math.min(...trace.slice(-10).map(s => s.b));
+  const never = last1sMin < threshold;
+  dlog('  ' + label + ': 最終b=' + finalB + ' 最大b=' + maxB + ' 回復時刻=' + (firstRecover ? firstRecover.t + 'ms' : '未回復') + (never ? ' ★最終1秒も暗転継続!' : ''));
+  return { finalB, maxB, firstRecover: firstRecover ? firstRecover.t : -1, never };
+}
+
+// パターン 1: 単一動画、ct 触らず play
+async function gPattern1(round) {
+  await ensureGFile();
+  gVid.pause();
+  ensureGRvfc();
+  await new Promise(r => setTimeout(r, 200));
+  const playStart = performance.now();
+  try { await gVid.play(); } catch (e) { dlog('  play() error: ' + e.message); }
+  return await gMeasureTrace(playStart, gVid, gCvs, 'P1-回' + round);
+}
+
+// パターン 2: 単一動画、ct=10 セット → play
+async function gPattern2(round) {
+  await ensureGFile();
+  gVid.pause();
+  gVid.currentTime = 10;
+  await new Promise(r => {
+    gVid.addEventListener('seeked', function once() { gVid.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  });
+  ensureGRvfc();
+  await new Promise(r => setTimeout(r, 200));
+  const playStart = performance.now();
+  try { await gVid.play(); } catch (e) { dlog('  play() error: ' + e.message); }
+  return await gMeasureTrace(playStart, gVid, gCvs, 'P2-回' + round);
+}
+
+// パターン 3: 4 video、ct 触らず play (50ms 順次)
+async function gPattern3(round) {
+  if (!files.every(f => f)) throw new Error('4 files not ready');
+  // C の vids を使う (既に初期化済み)
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  const playStart = performance.now();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(() => {});
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  // front のみ brightness 記録 (代表)
+  return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P3-回' + round);
+}
+
+// パターン 4: 4 video、ct=10 セット → play (50ms 順次)
+async function gPattern4(round) {
+  if (!files.every(f => f)) throw new Error('4 files not ready');
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  for (const v of cVids) v.currentTime = 10;
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  })));
+  ensureCRvfc();
+  await new Promise(r => setTimeout(r, 200));
+  const playStart = performance.now();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(() => {});
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P4-回' + round);
+}
+
+async function gRunAll() {
+  if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
+  const statusEl = document.getElementById('status-g');
+  const patterns = [
+    { name: 'P1: 単一動画 ct 触らず → play', fn: gPattern1 },
+    { name: 'P2: 単一動画 ct=10 → play', fn: gPattern2 },
+    { name: 'P3: 4 video ct 触らず → play', fn: gPattern3 },
+    { name: 'P4: 4 video ct=10 → play', fn: gPattern4 },
+  ];
+  const allResults = {};
+  dlog('==========================================');
+  dlog('G: 網羅的自動テスト 開始');
+  dlog('==========================================');
+  for (const p of patterns) {
+    dlog('--- ' + p.name + ' ---');
+    allResults[p.name] = [];
+    for (let round = 1; round <= 3; round++) {
+      statusEl.textContent = p.name + ' 回' + round + '/3 実行中...';
+      try {
+        const r = await p.fn(round);
+        allResults[p.name].push(r);
+      } catch (e) {
+        dlog('  エラー: ' + e.message);
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  // サマリ
+  dlog('==========================================');
+  dlog('G: サマリ');
+  dlog('==========================================');
+  for (const p of patterns) {
+    const rs = allResults[p.name];
+    const neverCount = rs.filter(r => r && r.never).length;
+    const recoveryTimes = rs.filter(r => r && !r.never).map(r => r.firstRecover);
+    const avgRecovery = recoveryTimes.length > 0 ? Math.round(recoveryTimes.reduce((a, b) => a + b, 0) / recoveryTimes.length) : -1;
+    dlog(p.name + ': 3回中 ' + neverCount + '回暗転継続、回復した回の平均回復時刻 ' + (avgRecovery >= 0 ? avgRecovery + 'ms' : 'なし'));
+  }
+  dlog('==========================================');
+  statusEl.textContent = '網羅テスト完了';
+}
+
+// =====================================================================
 // F: 1 video のみで currentTime セット → play の brightness 推移
 // =====================================================================
 const fVid = document.getElementById('vid-f');
@@ -1009,7 +1191,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 17:00)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 17:30)';
 </script>
 </body>
 </html>
