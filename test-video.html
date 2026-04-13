@@ -95,11 +95,56 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:25)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:35)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- CC: ディレクトリ選択 + 4 カメラ別ファイル -->
+    <div class="test-row" style="border-color:#0ff">
+      <div class="test-header">
+        <span class="test-label" style="color:#0ff">CC: 4 カメラ別ファイル (本体と同じファイル構成)</span>
+        <span class="test-desc">TeslaCam フォルダから front/back/left_repeater/right_repeater の 4 ファイルを自動割り当て</span>
+        <span class="test-status" id="status-cc"></span>
+      </div>
+      <div style="margin-bottom:6px">
+        <label style="display:inline-block;padding:6px 16px;background:#4af;color:#fff;border-radius:4px;cursor:pointer;font-size:13px">
+          📁 TeslaCam フォルダを選択
+          <input type="file" id="cc-dir-input" webkitdirectory directory style="display:none">
+        </label>
+        <span id="cc-files-info" style="margin-left:8px;font-size:11px;color:#aaa"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-cc1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-cc1"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-cc2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-cc2"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-cc3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-cc3"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-cc4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-cc4"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="ccPlay()">4 video 再生</button>
+        <button onclick="ccPauseAndSeek()">一時停止 + seekTo</button>
+        <button onclick="ccAutoTest(30)">自動: 30秒再生→pause</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- BB: 8 video (4 表示 + 4 idle = 本体と同じ video 数) -->
     <div class="test-row" style="border-color:#f0f">
       <div class="test-header">
@@ -925,6 +970,108 @@ function stopRvfc(video) {
   }
 }
 
+// --- CC: ディレクトリ選択 + 4 カメラ別ファイル ---
+const ccVids = [1,2,3,4].map(i => document.getElementById('vid-cc'+i));
+const ccCvs  = [1,2,3,4].map(i => document.getElementById('cvs-cc'+i));
+const ccPaused = [false,false,false,false];
+const ccT0 = [0,0,0,0];
+const ccCamNames = ['front','back','left_repeater','right_repeater'];
+const ccFiles = [null,null,null,null];
+
+document.getElementById('cc-dir-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  const info = document.getElementById('cc-files-info');
+  // 各カメラの最初のファイルを取得
+  for (let i = 0; i < 4; i++) {
+    const cam = ccCamNames[i];
+    const found = files.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
+    ccFiles[i] = found[0] || null;
+  }
+  info.innerHTML = ccFiles.map((f, i) => ccCamNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
+  if (ccFiles.every(f => f)) {
+    // 4 ファイル揃ったら video にロード
+    dlog('CC: 4 カメラファイル ロード中...');
+    for (let i = 0; i < 4; i++) {
+      const blob = await mp4Faststart(ccFiles[i]);
+      ccVids[i].src = URL.createObjectURL(blob);
+    }
+    dlog('CC: 4 カメラファイル ロード完了');
+    info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備完了</span>';
+  }
+});
+
+function startRvfcWithReadyStateCC(video, canvas, idx) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (ccPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - ccT0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog('CC[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(loop);
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+
+function ccPlay() {
+  if (!ccFiles.every(f => f)) { alert('まず TeslaCam フォルダを選択してください'); return; }
+  ccPaused.fill(false);
+  ccVids.forEach((v, i) => {
+    v.play().then(() => dlog('CC[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('CC[' + ccCamNames[i] + ']: play() error: '+e.message));
+    startRvfcWithReadyStateCC(v, ccCvs[i], i);
+  });
+  document.getElementById('status-cc').textContent = '4 カメラ再生中';
+  dlog('CC: 4 カメラ再生開始');
+}
+
+function ccPauseAndSeek() {
+  dlog('CC: pause + seekTo (4 カメラ別ファイル) 開始 ===');
+  ccVids.forEach((v, i) => {
+    ccT0[i] = performance.now();
+    const ct = v.currentTime;
+    v.pause();
+    dlog('CC[' + ccCamNames[i] + ']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(ccCvs[i]));
+    v.currentTime = ct;
+    ccPaused[i] = true;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - ccT0[i]).toFixed(0);
+      dlog('CC[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
+    });
+  });
+}
+
+async function ccAutoTest(seconds) {
+  if (!ccFiles.every(f => f)) { alert('まず TeslaCam フォルダを選択してください'); return; }
+  dlog('CC: 自動テスト ' + seconds + '秒再生→pause 開始');
+  ccPlay();
+  for (let s = seconds; s > 0; s -= 5) {
+    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
+    document.getElementById('status-cc').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
+  }
+  dlog('CC: ' + seconds + '秒経過、pause 実行');
+  ccPauseAndSeek();
+}
+
 // --- BB: 8 video (4 表示 + 4 idle) ---
 const bbVids = [1,2,3,4].map(i => document.getElementById('vid-bb'+i));
 const bbCvs  = [1,2,3,4].map(i => document.getElementById('cvs-bb'+i));
@@ -1614,7 +1761,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
