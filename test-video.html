@@ -53,7 +53,8 @@
       </div>
       <div class="test-body" style="max-width:360px"><video id="vid-g" playsinline muted style="visibility:hidden"></video><canvas id="cvs-g"></canvas><div class="cam-label">測定用 (1 video の時)</div></div>
       <div class="btns">
-        <button onclick="gRunAll()">網羅テスト実行 (約 1 分)</button>
+        <button onclick="gRunAll()">網羅テスト (8x10 = 80 回、約 5 分)</button>
+        <button onclick="gRepeatP3(10)">P3 だけ 10 回 (短縮)</button>
       </div>
     </div>
 
@@ -895,6 +896,13 @@ async function gMeasureTrace(playStart, vid, cvs, label) {
   const last1sMin = Math.min(...trace.slice(-10).map(s => s.b));
   const never = last1sMin < threshold;
   dlog('  ' + label + ': 最終b=' + finalB + ' 最大b=' + maxB + ' 回復時刻=' + (firstRecover ? firstRecover.t + 'ms' : '未回復') + (never ? ' ★最終1秒も暗転継続!' : ''));
+  // 暗転継続時は詳細推移をログに出す
+  if (never) {
+    dlog('  ' + label + ' 詳細推移:');
+    for (const s of trace) {
+      dlog('    t=' + s.t + 'ms ct=' + s.ct.toFixed(3) + ' b=' + s.b);
+    }
+  }
   return { finalB, maxB, firstRecover: firstRecover ? firstRecover.t : -1, never };
 }
 
@@ -962,43 +970,140 @@ async function gPattern4(round) {
   return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P4-回' + round);
 }
 
+// P3 だけ N 回繰り返す (再現率確認)
+async function gRepeatP3(count) {
+  if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
+  const statusEl = document.getElementById('status-g');
+  dlog('==========================================');
+  dlog('G: P3 を ' + count + ' 回繰り返し 開始');
+  dlog('==========================================');
+  const results = [];
+  for (let round = 1; round <= count; round++) {
+    statusEl.textContent = 'P3 回' + round + '/' + count + ' 実行中...';
+    try {
+      const r = await gPattern3(round);
+      results.push(r);
+    } catch (e) {
+      dlog('  エラー: ' + e.message);
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  const neverCount = results.filter(r => r && r.never).length;
+  dlog('==========================================');
+  dlog('G: P3 x ' + count + ' サマリ: ' + neverCount + '/' + count + ' 回暗転継続');
+  dlog('==========================================');
+  statusEl.textContent = 'P3 繰り返し完了';
+}
+
+// パターン 5: 単一動画、再生中に ct 変更 (再生中シーク)
+async function gPattern5(round) {
+  await ensureGFile();
+  gVid.pause();
+  ensureGRvfc();
+  // まず再生を 1 秒やる (安定した再生状態を作る)
+  gVid.currentTime = 0;
+  await new Promise(r => {
+    gVid.addEventListener('seeked', function once() { gVid.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  });
+  try { await gVid.play(); } catch {}
+  await new Promise(r => setTimeout(r, 1000));
+  // 再生中に ct 変更
+  const playStart = performance.now();
+  gVid.currentTime = 10;
+  return await gMeasureTrace(playStart, gVid, gCvs, 'P5-回' + round);
+}
+
+// パターン 6: 4 video、再生中に ct 変更
+async function gPattern6(round) {
+  if (!files.every(f => f)) throw new Error('4 files not ready');
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  // まず再生を 1 秒 (安定状態)
+  for (const v of cVids) v.currentTime = 0;
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  })));
+  ensureCRvfc();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(() => {});
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  await new Promise(r => setTimeout(r, 1000));
+  // 再生中に ct 変更 (全 video 同時)
+  const playStart = performance.now();
+  for (const v of cVids) v.currentTime = 10;
+  return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P6-回' + round);
+}
+
+// パターン 7: 単一動画、一時停止中に ct 変更 → そのまま
+async function gPattern7(round) {
+  await ensureGFile();
+  gVid.pause();
+  ensureGRvfc();
+  await new Promise(r => setTimeout(r, 200));
+  // 一時停止状態で ct 変更
+  const playStart = performance.now();
+  gVid.currentTime = 10;
+  return await gMeasureTrace(playStart, gVid, gCvs, 'P7-回' + round);
+}
+
+// パターン 8: 4 video、一時停止中に ct 変更 → そのまま
+async function gPattern8(round) {
+  if (!files.every(f => f)) throw new Error('4 files not ready');
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  ensureCRvfc();
+  await new Promise(r => setTimeout(r, 200));
+  // 一時停止状態で ct 変更 (全 video 同時)
+  const playStart = performance.now();
+  for (const v of cVids) v.currentTime = 10;
+  return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P8-回' + round);
+}
+
 async function gRunAll() {
   if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
   const statusEl = document.getElementById('status-g');
   const patterns = [
-    { name: 'P1: 単一動画 ct 触らず → play', fn: gPattern1 },
-    { name: 'P2: 単一動画 ct=10 → play', fn: gPattern2 },
+    { name: 'P1: 単一 ct 触らず → play', fn: gPattern1 },
+    { name: 'P2: 単一 ct=10 → play', fn: gPattern2 },
     { name: 'P3: 4 video ct 触らず → play', fn: gPattern3 },
     { name: 'P4: 4 video ct=10 → play', fn: gPattern4 },
+    { name: 'P5: 単一 再生中 ct 変更', fn: gPattern5 },
+    { name: 'P6: 4 video 再生中 ct 変更', fn: gPattern6 },
+    { name: 'P7: 単一 pause 中 ct 変更', fn: gPattern7 },
+    { name: 'P8: 4 video pause 中 ct 変更', fn: gPattern8 },
   ];
+  const ROUNDS = 10;
   const allResults = {};
   dlog('==========================================');
-  dlog('G: 網羅的自動テスト 開始');
+  dlog('G: 網羅的自動テスト 開始 (各 ' + ROUNDS + ' 回)');
   dlog('==========================================');
   for (const p of patterns) {
     dlog('--- ' + p.name + ' ---');
     allResults[p.name] = [];
-    for (let round = 1; round <= 3; round++) {
-      statusEl.textContent = p.name + ' 回' + round + '/3 実行中...';
+    for (let round = 1; round <= ROUNDS; round++) {
+      statusEl.textContent = p.name + ' 回' + round + '/' + ROUNDS + ' 実行中...';
       try {
         const r = await p.fn(round);
         allResults[p.name].push(r);
       } catch (e) {
         dlog('  エラー: ' + e.message);
       }
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 500));
     }
   }
   // サマリ
   dlog('==========================================');
-  dlog('G: サマリ');
+  dlog('G: サマリ (各 ' + ROUNDS + ' 回)');
   dlog('==========================================');
   for (const p of patterns) {
     const rs = allResults[p.name];
     const neverCount = rs.filter(r => r && r.never).length;
-    const recoveryTimes = rs.filter(r => r && !r.never).map(r => r.firstRecover);
+    const recoveryTimes = rs.filter(r => r && !r.never && r.firstRecover >= 0).map(r => r.firstRecover);
     const avgRecovery = recoveryTimes.length > 0 ? Math.round(recoveryTimes.reduce((a, b) => a + b, 0) / recoveryTimes.length) : -1;
-    dlog(p.name + ': 3回中 ' + neverCount + '回暗転継続、回復した回の平均回復時刻 ' + (avgRecovery >= 0 ? avgRecovery + 'ms' : 'なし'));
+    dlog(p.name + ': ' + ROUNDS + '回中 ' + neverCount + '回暗転継続、回復した回の平均回復時刻 ' + (avgRecovery >= 0 ? avgRecovery + 'ms' : 'なし'));
   }
   dlog('==========================================');
   statusEl.textContent = '網羅テスト完了';
@@ -1191,7 +1296,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 17:30)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 17:50)';
 </script>
 </body>
 </html>
