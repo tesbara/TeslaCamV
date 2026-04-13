@@ -56,6 +56,13 @@
         <button onclick="gRunAll()">網羅テスト (8x10 = 80 回、約 5 分)</button>
         <button onclick="gRepeatP3(10)">P3 だけ 10 回 (短縮)</button>
       </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ playbackRate による回復時間の変化</span>
+        <button onclick="gTestPlaybackRate(1.0)">rate=1.0</button>
+        <button onclick="gTestPlaybackRate(0.5)">rate=0.5</button>
+        <button onclick="gTestPlaybackRate(0.1)">rate=0.1</button>
+        <button onclick="gTestPlaybackRate(0.05)">rate=0.05</button>
+      </div>
     </div>
 
     <!-- F: 1 video のみで currentTime セット → play の brightness 推移 -->
@@ -970,6 +977,59 @@ async function gPattern4(round) {
   return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P4-回' + round);
 }
 
+// playbackRate を変えて暗転回復時間を計測
+async function gTestPlaybackRate(rate) {
+  if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
+  const statusEl = document.getElementById('status-g');
+  dlog('==========================================');
+  dlog('G: playbackRate=' + rate + ' 回復時間テスト 開始');
+  dlog('==========================================');
+  // 単一動画で: ct=0 にリセット → playbackRate 設定 → play → 3 秒実時間で brightness 推移
+  const ROUNDS = 3;
+  for (let round = 1; round <= ROUNDS; round++) {
+    statusEl.textContent = 'rate=' + rate + ' 回' + round + '/' + ROUNDS + '...';
+    await ensureGFile();
+    gVid.pause();
+    gVid.currentTime = 0;
+    await new Promise(r => {
+      gVid.addEventListener('seeked', function once() { gVid.removeEventListener('seeked', once); r(); });
+      setTimeout(r, 2000);
+    });
+    gVid.playbackRate = rate;
+    ensureGRvfc();
+    await new Promise(r => setTimeout(r, 200));
+    const playStart = performance.now();
+    try { await gVid.play(); } catch {}
+    // 3 秒間 (実時間) で brightness 推移を記録
+    const trace = [];
+    const endTime = performance.now() + 3000;
+    while (performance.now() < endTime) {
+      const elapsed = Math.round(performance.now() - playStart);
+      trace.push({
+        t: elapsed,
+        ct: gVid.currentTime,
+        b: measureBrightnessFull(gCvs),
+      });
+      await new Promise(r => setTimeout(r, 100));
+    }
+    gVid.pause();
+    // サマリ
+    const maxB = Math.max(...trace.map(s => s.b));
+    const threshold = Math.max(20, maxB * 0.5);
+    const firstRecover = trace.find(s => s.b >= threshold);
+    dlog('  rate=' + rate + ' 回' + round + ': 最終ct=' + trace[trace.length-1].ct.toFixed(3) + ' 最大b=' + maxB + ' 回復時刻=' + (firstRecover ? firstRecover.t + 'ms (その時の ct=' + firstRecover.ct.toFixed(3) + ')' : '未回復'));
+    if (!firstRecover || firstRecover.t > 1500) {
+      // 詳細ログ
+      dlog('  rate=' + rate + ' 回' + round + ' 詳細:');
+      for (const s of trace) dlog('    t=' + s.t + 'ms ct=' + s.ct.toFixed(3) + ' b=' + s.b);
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  gVid.playbackRate = 1.0;
+  dlog('==========================================');
+  statusEl.textContent = 'rate=' + rate + ' テスト完了';
+}
+
 // P3 だけ N 回繰り返す (再現率確認)
 async function gRepeatP3(count) {
   if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
@@ -1296,7 +1356,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 17:50)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 18:10)';
 </script>
 </body>
 </html>
