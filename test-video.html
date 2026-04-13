@@ -95,11 +95,50 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:55)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 10:08)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- EE: 再生開始を時間差で呼ぶ (play() の順次実行) -->
+    <div class="test-row" style="border-color:#a0f">
+      <div class="test-header">
+        <span class="test-label" style="color:#a0f">EE: play() を時間差で呼ぶ</span>
+        <span class="test-desc">CC のファイルを使用。play() を 200ms 間隔で順次呼んで、全 video が正常開始するか確認</span>
+        <span class="test-status" id="status-ee"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ee1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ee1"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ee2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ee2"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ee3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ee3"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ee4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ee4"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="eeAutoTest(0)">同時 play() (比較用)</button>
+        <button onclick="eeAutoTest(100)">100ms 間隔で play()</button>
+        <button onclick="eeAutoTest(200)">200ms 間隔で play()</button>
+        <button onclick="eeAutoTest(500)">500ms 間隔で play()</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- DD: CC と同じ + pause のみ (currentTime 再セットしない) -->
     <div class="test-row" style="border-color:#fa0">
       <div class="test-header">
@@ -1005,6 +1044,56 @@ function stopRvfc(video) {
   }
 }
 
+// --- EE: play() を時間差で呼ぶ ---
+const eeVids = [1,2,3,4].map(i => document.getElementById('vid-ee'+i));
+const eeCvs  = [1,2,3,4].map(i => document.getElementById('cvs-ee'+i));
+
+function startRvfcEE(video, canvas) {
+  const ctx = canvas.getContext('2d');
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+    if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+}
+
+async function eeAutoTest(intervalMs) {
+  if (!ccFiles.every(f => f)) { alert('まず CC の TeslaCam フォルダ選択を行ってください'); return; }
+  dlog('EE: ' + intervalMs + 'ms 間隔で play() テスト開始');
+  // 4 カメラファイルを EE 用にロード
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(ccFiles[i]);
+    eeVids[i].src = URL.createObjectURL(blob);
+  }
+  await Promise.all(eeVids.map(v => new Promise(r => {
+    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
+  })));
+  document.getElementById('status-ee').textContent = '4 video ロード完了、' + intervalMs + 'ms 間隔で play()';
+  // 順次 play()
+  for (let i = 0; i < 4; i++) {
+    const t0 = performance.now();
+    eeVids[i].play().then(() => {
+      const elapsed = (performance.now() - t0).toFixed(0);
+      dlog('EE[' + ccCamNames[i] + ']: play() resolved (' + elapsed + 'ms)');
+    }).catch(e => dlog('EE[' + ccCamNames[i] + ']: play() error: '+e.message));
+    startRvfcEE(eeVids[i], eeCvs[i]);
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  // 5 秒後に各 video の currentTime を確認
+  await new Promise(r => setTimeout(r, 5000));
+  eeVids.forEach((v, i) => {
+    dlog('EE[' + ccCamNames[i] + ']: 5秒後 ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + (v.currentTime < 0.1 ? ' ★再生失敗!' : ''));
+  });
+  document.getElementById('status-ee').textContent = 'テスト完了 (ログ参照)';
+}
+
 // --- DD: pause のみ (currentTime 再セットしない) ---
 const ddVids = [1,2,3,4].map(i => document.getElementById('vid-dd'+i));
 const ddCvs  = [1,2,3,4].map(i => document.getElementById('cvs-dd'+i));
@@ -1887,7 +1976,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd','ee'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
