@@ -825,7 +825,12 @@ function analyzeSpsFromBlob(blob) {
       else if(t==='avcC')scanAvcC(p+8,p+sz);p+=sz;}}
     function scanAvcC(s,e){if(s+6>e)return;const n=buf[s+5]&0x1F;let o=s+6;
       for(let i=0;i<n;i++){if(o+2>e)return;const l=(buf[o]<<8)|buf[o+1];o+=2;if(o+l>e)return;
-        const r=scanSps(buf.subarray(o,o+l)); if(r && result.hasVui===null){result=r;} o+=l;}}
+        const spsBytes = buf.subarray(o,o+l);
+        // SPS の先頭 16 バイトを hex 化
+        const hex = Array.from(spsBytes.slice(0, Math.min(16, l))).map(b => b.toString(16).padStart(2,'0')).join('');
+        const r=scanSps(spsBytes);
+        if(r && result.hasVui===null){result={...r, spsHex: hex};}
+        o+=l;}}
     function scanSps(sps) {
       let bp=8; const tb=sps.length*8;
       function rb(){if(bp>=tb)return 0;const v=(sps[bp>>3]>>(7-(bp&7)))&1;bp++;return v;}
@@ -857,7 +862,7 @@ function analyzeSpsFromBlob(blob) {
   });
 }
 
-// E: 4 カメラファイルの SPS 解析結果を表示
+// E: 4 カメラファイルの SPS 解析結果を表示 (生バイトもログに出す)
 async function eAnalyzeAll() {
   if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
   const resultEl = document.getElementById('e-result');
@@ -867,13 +872,18 @@ async function eAnalyzeAll() {
     '<th style="text-align:left;padding:4px;border:1px solid #444">カメラ</th>' +
     '<th style="text-align:left;padding:4px;border:1px solid #444">VUI</th>' +
     '<th style="text-align:left;padding:4px;border:1px solid #444">full_range_flag</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">err</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">SPS 先頭</th>' +
     '<th style="text-align:left;padding:4px;border:1px solid #444">暗転リスク</th>' +
     '</tr></thead><tbody>');
   for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(files[i]);
-    const sps = await analyzeSpsFromBlob(blob);
+    // mp4Faststart は patchSpsRemoveVui で SPS の VUI を除去するので
+    // 解析には生のファイル (File は Blob を継承) を渡す
+    const sps = await analyzeSpsFromBlob(files[i]);
     const vuiStr = sps.hasVui === true ? 'あり' : sps.hasVui === false ? 'なし' : '?';
     const frStr = sps.fullRange === true ? '1 (full)' : sps.fullRange === false ? '0 (limited)' : '?';
+    const errStr = sps.err || '';
+    const spsHex = sps.spsHex || '-';
     // 暗転リスク: VUI あり AND full_range=1
     const risk = sps.hasVui === true && sps.fullRange === true;
     const riskStr = risk ? '★あり' : (sps.hasVui === false ? 'なし' : '?');
@@ -881,8 +891,10 @@ async function eAnalyzeAll() {
     rows.push(`<tr><td style="padding:4px;border:1px solid #444">${camNames[i]}</td>` +
       `<td style="padding:4px;border:1px solid #444">${vuiStr}</td>` +
       `<td style="padding:4px;border:1px solid #444">${frStr}</td>` +
+      `<td style="padding:4px;border:1px solid #444;color:#f88">${errStr}</td>` +
+      `<td style="padding:4px;border:1px solid #444;font-family:monospace;font-size:10px">${spsHex}</td>` +
       `<td style="padding:4px;border:1px solid #444;color:${color}">${riskStr}</td></tr>`);
-    dlog('E[' + camNames[i] + ']: VUI=' + vuiStr + ' full_range=' + frStr + ' 暗転リスク=' + riskStr);
+    dlog('E[' + camNames[i] + ']: VUI=' + vuiStr + ' full_range=' + frStr + ' err=' + errStr + ' SPS=' + spsHex);
   }
   rows.push('</tbody></table>');
   resultEl.innerHTML = rows.join('');
@@ -890,7 +902,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 15:25)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 15:35)';
 </script>
 </body>
 </html>
