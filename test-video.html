@@ -204,10 +204,14 @@ async function pickDirectory() {
   for await (const [name, h] of dirHandle.entries()) {
     if (h.kind === 'file' && name.endsWith('.mp4')) allFiles.push({ name, h });
   }
+  // 「19-09-09」を含むファイル (約 60 秒の長尺) を優先的に選ぶ
+  const FILTER = '19-09-09';
   for (let i = 0; i < 4; i++) {
     const cam = camNames[i];
-    const found = allFiles.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
-    files[i] = found[0] ? await found[0].h.getFile() : null;
+    const camFiles = allFiles.filter(f => f.name.includes('-' + cam + '.mp4'));
+    const filtered = camFiles.filter(f => f.name.includes(FILTER));
+    const sorted = (filtered.length > 0 ? filtered : camFiles).sort((a,b) => a.name.localeCompare(b.name));
+    files[i] = sorted[0] ? await sorted[0].h.getFile() : null;
   }
   info.innerHTML = files.map((f, i) => camNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
   if (files.every(f => f)) {
@@ -401,7 +405,7 @@ async function bSeek(deltaSec, intervalMs) {
   }
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 12:10)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 12:25)';
 </script>
 </body>
 </html>
