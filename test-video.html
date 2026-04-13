@@ -95,7 +95,7 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 10:25)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 10:55)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
@@ -133,9 +133,12 @@
         <button onclick="ffPlayAndSeekTest(10, 'play')">10ms間隔 play</button>
         <button onclick="ffPlayAndSeekTest(30, 'play')">30ms間隔 play</button>
         <button onclick="ffPlayAndSeekTest(50, 'play')">50ms間隔 play</button>
-        <button onclick="ffSeekWhilePlaying(5)">再生中: +5秒シーク</button>
-        <button onclick="ffSeekWhilePlaying(-3)">再生中: -3秒シーク</button>
-        <button onclick="ffPauseAndSeek(5)">一時停止して+5秒シーク</button>
+        <button onclick="ffSeekWhilePlaying(5, 0)">再生中:+5秒シーク同時</button>
+        <button onclick="ffSeekWhilePlaying(5, 100)">再生中:+5秒シーク 100ms間隔</button>
+        <button onclick="ffSeekWhilePlaying(-3, 100)">再生中:-3秒シーク 100ms間隔</button>
+        <button onclick="ffPauseAndSeek(5, 0)">pause+5秒シーク同時</button>
+        <button onclick="ffPauseAndSeek(5, 100)">pause+5秒シーク 100ms間隔</button>
+        <button onclick="ffPauseAndSeek(5, 200)">pause+5秒シーク 200ms間隔</button>
       </div>
     </div>
 
@@ -1150,29 +1153,33 @@ async function ffPlayAndSeekTest(intervalMs, mode) {
   document.getElementById('status-ff').textContent = '再生中。シークボタンを押してください';
 }
 
-function ffSeekWhilePlaying(deltaSec) {
-  dlog('FF: 再生中シーク ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒 ===');
-  ffVids.forEach((v, i) => {
+async function ffSeekWhilePlaying(deltaSec, intervalMs) {
+  dlog('FF: 再生中シーク ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒 (間隔=' + intervalMs + 'ms) ===');
+  for (let i = 0; i < 4; i++) {
+    const v = ffVids[i];
     ffT0[i] = performance.now();
     const newTime = Math.max(0, v.currentTime + deltaSec);
     dlog('FF[' + ccCamNames[i] + ']: シーク前 ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
     v.currentTime = newTime;
-    ffPaused[i] = true;  // ログ取得モード ON
+    ffPaused[i] = true;
     v.addEventListener('seeked', function once() {
       v.removeEventListener('seeked', once);
       const elapsed = (performance.now() - ffT0[i]).toFixed(0);
       dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-      // シーク後はログ ON にしておくが、5 秒後に OFF
       setTimeout(() => { ffPaused[i] = false; }, 5000);
     });
-  });
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
 }
 
-function ffPauseAndSeek(deltaSec) {
-  dlog('FF: 一時停止して ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒シーク ===');
-  ffVids.forEach((v, i) => {
+async function ffPauseAndSeek(deltaSec, intervalMs) {
+  dlog('FF: 一時停止して ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒シーク (間隔=' + intervalMs + 'ms) ===');
+  // 全部 pause を先に
+  ffVids.forEach(v => v.pause());
+  // 順次 currentTime をセット
+  for (let i = 0; i < 4; i++) {
+    const v = ffVids[i];
     ffT0[i] = performance.now();
-    v.pause();
     const newTime = Math.max(0, v.currentTime + deltaSec);
     dlog('FF[' + ccCamNames[i] + ']: pause+シーク ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
     v.currentTime = newTime;
@@ -1182,7 +1189,8 @@ function ffPauseAndSeek(deltaSec) {
       const elapsed = (performance.now() - ffT0[i]).toFixed(0);
       dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
     });
-  });
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
 }
 
 // --- EE: play() を時間差で呼ぶ ---
