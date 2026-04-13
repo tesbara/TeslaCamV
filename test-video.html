@@ -95,11 +95,47 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:42)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:55)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- DD: CC と同じ + pause のみ (currentTime 再セットしない) -->
+    <div class="test-row" style="border-color:#fa0">
+      <div class="test-header">
+        <span class="test-label" style="color:#fa0">DD: 4 カメラ + pause のみ (currentTime 再セットしない)</span>
+        <span class="test-desc">CC と同じファイルを使用。pause だけ呼んで currentTime を一切セットしない。これで暗転するか?</span>
+        <span class="test-status" id="status-dd"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-dd1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-dd1"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-dd2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-dd2"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-dd3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-dd3"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-dd4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-dd4"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="ddAutoTest(30)">自動: 30秒再生→pause のみ</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- CC: ディレクトリ選択 + 4 カメラ別ファイル -->
     <div class="test-row" style="border-color:#0ff">
       <div class="test-header">
@@ -969,6 +1005,77 @@ function stopRvfc(video) {
   }
 }
 
+// --- DD: pause のみ (currentTime 再セットしない) ---
+const ddVids = [1,2,3,4].map(i => document.getElementById('vid-dd'+i));
+const ddCvs  = [1,2,3,4].map(i => document.getElementById('cvs-dd'+i));
+const ddPaused = [false,false,false,false];
+const ddT0 = [0,0,0,0];
+
+function startRvfcWithReadyStateDD(video, canvas, idx) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (ddPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - ddT0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog('DD[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+  if ('requestVideoFrameCallback' in video) {
+    video.requestVideoFrameCallback(loop);
+  } else {
+    requestAnimationFrame(loop);
+  }
+}
+
+async function ddAutoTest(seconds) {
+  if (!ccFiles.every(f => f)) { alert('まず CC の TeslaCam フォルダ選択を行ってください'); return; }
+  // CC のファイルを DD 用に再ロード
+  dlog('DD: 4 カメラファイル DD 用にロード中...');
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(ccFiles[i]);
+    ddVids[i].src = URL.createObjectURL(blob);
+  }
+  // loadeddata 待ち
+  await Promise.all(ddVids.map(v => new Promise(r => {
+    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
+  })));
+  ddPaused.fill(false);
+  ddVids.forEach((v, i) => {
+    v.play().then(() => dlog('DD[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('DD[' + ccCamNames[i] + ']: play() error: '+e.message));
+    startRvfcWithReadyStateDD(v, ddCvs[i], i);
+  });
+  document.getElementById('status-dd').textContent = seconds + '秒再生中...';
+  for (let s = seconds; s > 0; s -= 5) {
+    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
+    document.getElementById('status-dd').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
+  }
+  // pause だけ。currentTime には触らない
+  dlog('DD: ' + seconds + '秒経過、pause のみ実行 (currentTime 触らない) ===');
+  ddVids.forEach((v, i) => {
+    ddT0[i] = performance.now();
+    v.pause();
+    dlog('DD[' + ccCamNames[i] + ']: pause ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(ddCvs[i]));
+    ddPaused[i] = true;
+  });
+  document.getElementById('status-dd').textContent = '一時停止 (currentTime 触らない)';
+}
+
 // --- CC: ディレクトリ選択 + 4 カメラ別ファイル ---
 const ccVids = [1,2,3,4].map(i => document.getElementById('vid-cc'+i));
 const ccCvs  = [1,2,3,4].map(i => document.getElementById('cvs-cc'+i));
@@ -1780,7 +1887,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
