@@ -44,24 +44,17 @@
 
   <div id="tests">
 
-    <!-- D: 各ディレクトリの暗転判定サマリ -->
+    <!-- E: SPS 解析による暗転判定 -->
     <div class="test-row" style="border-color:#0ff">
       <div class="test-header">
-        <span class="test-label" style="color:#0ff">D: 各ディレクトリ暗転判定サマリ</span>
-        <span class="test-desc">親フォルダを選択し、各サブディレクトリの代表ファイル 1 つで暗転判定を実行 (SPS 解析 + 実測)</span>
-        <span class="test-status" id="status-d"></span>
+        <span class="test-label" style="color:#0ff">E: SPS 解析による暗転判定</span>
+        <span class="test-desc">フォルダ選択済みの 4 カメラファイルの SPS を解析。VUI あり + full_range=1 なら暗転リスクあり</span>
+        <span class="test-status" id="status-e"></span>
       </div>
-      <div style="margin-bottom:6px">
-        <button onclick="dScanAll(10)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (最大10件)</button>
-        <button onclick="dScanAll(30)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (最大30件)</button>
-        <button onclick="dScanAll(999)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (全件)</button>
+      <div class="btns">
+        <button onclick="eAnalyzeAll()">4 カメラの SPS 解析</button>
       </div>
-      <!-- 判定中の 1 台だけの video -->
-      <div class="test-body" style="max-width:240px;aspect-ratio:16/9">
-        <video id="vid-d" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-d"></canvas>
-      </div>
-      <div id="d-table" style="margin-top:8px;font-size:11px"></div>
+      <div id="e-result" style="margin-top:6px;font-size:12px"></div>
     </div>
 
     <!-- C: 再生開始時の seekTo 影響 (最新) -->
@@ -814,30 +807,8 @@ async function cPositionTest(positions) {
 }
 
 // =====================================================================
-// D: 各ディレクトリ暗転判定サマリ
+// E: SPS 解析による暗転判定
 // =====================================================================
-const dVid = document.getElementById('vid-d');
-const dCvs = document.getElementById('cvs-d');
-let dRvfcStarted = false;
-
-function ensureDRvfc() {
-  if (dRvfcStarted) return;
-  const ctx = dCvs.getContext('2d');
-  function loop() {
-    if (dVid.videoWidth > 0 && dVid.videoHeight > 0) {
-      if (dCvs.width !== dVid.videoWidth || dCvs.height !== dVid.videoHeight) {
-        dCvs.width = dVid.videoWidth; dCvs.height = dVid.videoHeight;
-      }
-      ctx.drawImage(dVid, 0, 0, dVid.videoWidth, dVid.videoHeight);
-    }
-    if ('requestVideoFrameCallback' in dVid) dVid.requestVideoFrameCallback(loop);
-    else requestAnimationFrame(loop);
-  }
-  if ('requestVideoFrameCallback' in dVid) dVid.requestVideoFrameCallback(loop);
-  else requestAnimationFrame(loop);
-  dRvfcStarted = true;
-}
-
 // SPS 解析: VUI の有無と video_full_range_flag を返す
 function analyzeSpsFromBlob(blob) {
   return blob.arrayBuffer().then(buffer => {
@@ -886,146 +857,40 @@ function analyzeSpsFromBlob(blob) {
   });
 }
 
-// 1 ファイルで実測: 再生開始 → 500ms と 1000ms で brightness 測定 → pause
-async function measureOneFile(file) {
-  const blob = await mp4Faststart(file);
-  const oldUrl = dVid.src;
-  dVid.src = URL.createObjectURL(blob);
-  if (oldUrl) URL.revokeObjectURL(oldUrl);
-  // loadeddata 待ち
-  await new Promise(r => {
-    const onLoaded = () => { dVid.removeEventListener('loadeddata', onLoaded); r(); };
-    dVid.addEventListener('loadeddata', onLoaded);
-    setTimeout(r, 5000);  // タイムアウト
-  });
-  ensureDRvfc();
-  dVid.currentTime = 0;
-  await new Promise(r => {
-    const onSeeked = () => { dVid.removeEventListener('seeked', onSeeked); r(); };
-    dVid.addEventListener('seeked', onSeeked);
-    setTimeout(r, 2000);
-  });
-  await new Promise(r => setTimeout(r, 100));
-  // 再生開始
-  const playStart = performance.now();
-  try { await dVid.play(); } catch (e) { return { err: e.message }; }
-  // 500ms と 1000ms で measure
-  await new Promise(r => setTimeout(r, 500));
-  const b500 = measureBrightnessFull(dCvs);
-  const ct500 = dVid.currentTime;
-  await new Promise(r => setTimeout(r, 500));
-  const b1000 = measureBrightnessFull(dCvs);
-  const ct1000 = dVid.currentTime;
-  dVid.pause();
-  return { b500, ct500, b1000, ct1000 };
-}
-
-// サブディレクトリを再帰的に探して、mp4 を含むものをリスト化
-async function collectDirsWithMp4(handle, path = '') {
-  const dirs = [];
-  let hasMp4 = false;
-  const children = [];
-  for await (const [name, h] of handle.entries()) {
-    if (h.kind === 'file' && name.endsWith('.mp4')) hasMp4 = true;
-    else if (h.kind === 'directory') children.push([name, h]);
-  }
-  if (hasMp4) dirs.push({ path, handle });
-  for (const [name, h] of children) {
-    const sub = await collectDirsWithMp4(h, path ? path + '/' + name : name);
-    dirs.push(...sub);
-  }
-  return dirs;
-}
-
-// ディレクトリから代表ファイル 1 つを選ぶ (サイズ >= 閾値 の front 優先)
-async function pickRepresentativeFile(dirHandle, minSize = 5 * 1024 * 1024) {
-  const candidates = [];
-  for await (const [name, h] of dirHandle.entries()) {
-    if (h.kind !== 'file' || !name.endsWith('.mp4')) continue;
-    const f = await h.getFile();
-    if (f.size < minSize) continue;
-    candidates.push({ name, f });
-  }
-  if (candidates.length === 0) return null;
-  // front を優先、次にサイズ最大
-  const front = candidates.find(c => c.name.includes('front'));
-  if (front) return front.f;
-  candidates.sort((a, b) => b.f.size - a.f.size);
-  return candidates[0].f;
-}
-
-async function dScanAll(maxCount) {
-  const tableEl = document.getElementById('d-table');
-  const statusEl = document.getElementById('status-d');
-  if (!('showDirectoryPicker' in window)) { alert('File System Access API 未対応'); return; }
-  let rootHandle;
-  try { rootHandle = await window.showDirectoryPicker(); }
-  catch (e) { if (e.name !== 'AbortError') alert('エラー: ' + e.message); return; }
-  statusEl.textContent = 'ディレクトリ走査中...';
-  const dirs = await collectDirsWithMp4(rootHandle);
-  dlog('D: ' + dirs.length + ' 個のディレクトリ発見、最大 ' + maxCount + ' 件を処理');
-  const targets = dirs.slice(0, maxCount);
-  const results = [];
-  let rows = '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">#</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">ディレクトリ</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">ファイル</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">サイズ</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">SPS VUI</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">full_range</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">b500ms</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">b1000ms</th>' +
-    '<th style="text-align:left;padding:4px;border:1px solid #444">判定</th>' +
-    '</tr></thead><tbody></tbody></table>';
-  tableEl.innerHTML = rows;
-  const tbody = tableEl.querySelector('tbody');
-
-  for (let i = 0; i < targets.length; i++) {
-    const dir = targets[i];
-    statusEl.textContent = (i+1) + '/' + targets.length + ': ' + dir.path + ' 処理中...';
-    const file = await pickRepresentativeFile(dir.handle);
-    if (!file) {
-      tbody.innerHTML += `<tr><td style="padding:4px;border:1px solid #444">${i+1}</td><td style="padding:4px;border:1px solid #444">${dir.path}</td><td colspan="7" style="padding:4px;border:1px solid #444;color:#888">(大きいファイルなし)</td></tr>`;
-      continue;
-    }
-    let sps, measure;
-    try {
-      const blob = await mp4Faststart(file);
-      sps = await analyzeSpsFromBlob(blob);
-      measure = await measureOneFile(file);
-    } catch (e) {
-      tbody.innerHTML += `<tr><td style="padding:4px;border:1px solid #444">${i+1}</td><td style="padding:4px;border:1px solid #444">${dir.path}</td><td style="padding:4px;border:1px solid #444">${file.name}</td><td colspan="6" style="padding:4px;border:1px solid #444;color:#f88">ERR: ${e.message}</td></tr>`;
-      continue;
-    }
-    const r = { dir: dir.path, file: file.name, size: file.size, sps, measure };
-    results.push(r);
-    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+// E: 4 カメラファイルの SPS 解析結果を表示
+async function eAnalyzeAll() {
+  if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
+  const resultEl = document.getElementById('e-result');
+  resultEl.innerHTML = '解析中...';
+  const rows = [];
+  rows.push('<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">カメラ</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">VUI</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">full_range_flag</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">暗転リスク</th>' +
+    '</tr></thead><tbody>');
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(files[i]);
+    const sps = await analyzeSpsFromBlob(blob);
     const vuiStr = sps.hasVui === true ? 'あり' : sps.hasVui === false ? 'なし' : '?';
     const frStr = sps.fullRange === true ? '1 (full)' : sps.fullRange === false ? '0 (limited)' : '?';
-    const b500 = measure.b500 ?? '-';
-    const b1000 = measure.b1000 ?? '-';
-    const isDark = measure.b500 !== undefined && measure.b500 <= 5;
-    const dotenStr = isDark ? '★暗転' : '正常';
-    const dotenColor = isDark ? '#f88' : '#8f8';
-    tbody.innerHTML += `<tr>` +
-      `<td style="padding:4px;border:1px solid #444">${i+1}</td>` +
-      `<td style="padding:4px;border:1px solid #444">${dir.path}</td>` +
-      `<td style="padding:4px;border:1px solid #444">${file.name}</td>` +
-      `<td style="padding:4px;border:1px solid #444">${sizeMB}MB</td>` +
+    // 暗転リスク: VUI あり AND full_range=1
+    const risk = sps.hasVui === true && sps.fullRange === true;
+    const riskStr = risk ? '★あり' : (sps.hasVui === false ? 'なし' : '?');
+    const color = risk ? '#f88' : '#8f8';
+    rows.push(`<tr><td style="padding:4px;border:1px solid #444">${camNames[i]}</td>` +
       `<td style="padding:4px;border:1px solid #444">${vuiStr}</td>` +
       `<td style="padding:4px;border:1px solid #444">${frStr}</td>` +
-      `<td style="padding:4px;border:1px solid #444">${b500}</td>` +
-      `<td style="padding:4px;border:1px solid #444">${b1000}</td>` +
-      `<td style="padding:4px;border:1px solid #444;color:${dotenColor}">${dotenStr}</td>` +
-      `</tr>`;
-    dlog('D: ' + (i+1) + '/' + targets.length + ' ' + dir.path + ' VUI=' + vuiStr + ' full=' + frStr + ' b500=' + b500 + ' b1000=' + b1000 + ' ' + dotenStr);
-    await new Promise(r => setTimeout(r, 200));
+      `<td style="padding:4px;border:1px solid #444;color:${color}">${riskStr}</td></tr>`);
+    dlog('E[' + camNames[i] + ']: VUI=' + vuiStr + ' full_range=' + frStr + ' 暗転リスク=' + riskStr);
   }
-  statusEl.textContent = '完了 (' + results.length + ' 件)';
-  dlog('D: ' + results.length + ' 件の判定完了');
+  rows.push('</tbody></table>');
+  resultEl.innerHTML = rows.join('');
+  document.getElementById('status-e').textContent = '解析完了';
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 14:35)';
+
+document.getElementById('build-time').textContent = '(build: 2026-04-13 15:25)';
 </script>
 </body>
 </html>
