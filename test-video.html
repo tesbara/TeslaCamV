@@ -80,8 +80,9 @@
       </div>
       <div class="btns" style="margin-top:4px">
         <span style="font-size:11px;color:#888;align-self:center">▼ brightness 時系列 (再生開始直後から 3 秒間、100ms 毎に記録)</span>
-        <button onclick="cBrightnessTrace(3000, 100)">brightness推移 3秒</button>
-        <button onclick="cBrightnessTrace(5000, 100)">brightness推移 5秒</button>
+        <button onclick="cBrightnessTrace(3000, 100)">ct=0 リセット→再生 3秒</button>
+        <button onclick="cBrightnessTraceNoReset(3000, 100)">ct リセットなし→再生 3秒</button>
+        <button onclick="cBrightnessTraceWarmup(3000, 100)">ウォームアップ後→再生 3秒</button>
       </div>
     </div>
 
@@ -647,9 +648,47 @@ async function cRepeatTest(mode, pauseDelayMs, count) {
   document.getElementById('status-c').textContent = '連続テスト完了';
 }
 
-// brightness 時系列トレース: 再生開始から指定時間、brightness を intervalMs 毎に記録
+// brightness 時系列トレース: ct=0 にリセットしてから再生
 async function cBrightnessTrace(durationMs, intervalMs) {
-  dlog('======= C: brightness 時系列 ' + durationMs + 'ms @' + intervalMs + 'ms 開始 =======');
+  dlog('======= C: brightness 時系列 (ct=0 リセット) ' + durationMs + 'ms @' + intervalMs + 'ms 開始 =======');
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  for (let i = 0; i < 4; i++) cVids[i].currentTime = 0;
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 1500);
+  })));
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  const playStart = performance.now();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  dlog('C: play 4 video 発行完了 (累積 150ms)');
+  await cRecordBrightnessTrace(playStart, durationMs, intervalMs);
+}
+
+// brightness 時系列トレース: currentTime リセットなし (現在位置から再生開始)
+async function cBrightnessTraceNoReset(durationMs, intervalMs) {
+  dlog('======= C: brightness 時系列 (ct リセットなし) ' + durationMs + 'ms @' + intervalMs + 'ms 開始 =======');
+  dlog('C: 各カメラの現在 ct = ' + cVids.map((v, i) => camNames[i] + '=' + v.currentTime.toFixed(3)).join(' '));
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  const playStart = performance.now();
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  dlog('C: play 4 video 発行完了 (累積 150ms)');
+  await cRecordBrightnessTrace(playStart, durationMs, intervalMs);
+}
+
+// brightness 時系列トレース: ウォームアップ (0.5秒再生→pause) してから本格再生
+async function cBrightnessTraceWarmup(durationMs, intervalMs) {
+  dlog('======= C: ウォームアップ→再生 ' + durationMs + 'ms @' + intervalMs + 'ms 開始 =======');
   // リセット
   cPaused.fill(false);
   cVids.forEach(v => v.pause());
@@ -660,17 +699,32 @@ async function cBrightnessTrace(durationMs, intervalMs) {
   })));
   await new Promise(r => setTimeout(r, 200));
   ensureCRvfc();
-  // 再生開始 (50ms 順次)
+  // 1. ウォームアップ再生 (1秒)
+  dlog('C: ウォームアップ開始 (1秒再生)');
+  for (let i = 0; i < 4; i++) {
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: warmup play() error: '+e.message));
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  await new Promise(r => setTimeout(r, 1000));
+  // 2. pause
+  cVids.forEach(v => v.pause());
+  dlog('C: ウォームアップ完了、pause 後 ct = ' + cVids.map((v, i) => camNames[i] + '=' + v.currentTime.toFixed(3)).join(' '));
+  await new Promise(r => setTimeout(r, 300));
+  // 3. 本格再生 (現在位置から)
+  dlog('C: 本格再生開始');
   const playStart = performance.now();
   for (let i = 0; i < 4; i++) {
     cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
     if (i < 3) await new Promise(r => setTimeout(r, 50));
   }
   dlog('C: play 4 video 発行完了 (累積 150ms)');
-  // brightness を記録
-  const traces = [[],[],[],[]];  // [cam][{t, ct, bCenter, bFull}]
-  const traceStart = performance.now();
-  const traceEnd = traceStart + durationMs;
+  await cRecordBrightnessTrace(playStart, durationMs, intervalMs);
+}
+
+// brightness 時系列記録の共通処理
+async function cRecordBrightnessTrace(playStart, durationMs, intervalMs) {
+  const traces = [[],[],[],[]];
+  const traceEnd = performance.now() + durationMs;
   while (performance.now() < traceEnd) {
     const elapsed = Math.round(performance.now() - playStart);
     for (let i = 0; i < 4; i++) {
@@ -683,16 +737,13 @@ async function cBrightnessTrace(durationMs, intervalMs) {
     }
     await new Promise(r => setTimeout(r, intervalMs));
   }
-  // pause
   cVids.forEach(v => v.pause());
-  // ログ出力 (各カメラ)
   for (let i = 0; i < 4; i++) {
     dlog('--- C[' + camNames[i] + '] 時系列 ---');
     for (const s of traces[i]) {
       dlog('  t=' + s.t + 'ms ct=' + s.ct.toFixed(3) + ' bCenter=' + s.bCenter + ' bFull=' + s.bFull);
     }
   }
-  // サマリ: 各カメラで bFull が最終値の 80% に達した最初の時刻
   for (let i = 0; i < 4; i++) {
     const tr = traces[i];
     const finalB = tr[tr.length - 1].bFull;
@@ -742,7 +793,7 @@ async function cPositionTest(positions) {
   document.getElementById('status-c').textContent = '位置変動テスト完了';
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 12:30)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 14:20)';
 </script>
 </body>
 </html>
