@@ -95,11 +95,52 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 10:08)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 10:25)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
   <div id="tests">
+    <!-- FF: シーク + より短い play() 間隔の検証 -->
+    <div class="test-row" style="border-color:#ff8">
+      <div class="test-header">
+        <span class="test-label" style="color:#ff8">FF: シーク + 短い play() 間隔</span>
+        <span class="test-desc">CC のファイル使用。play() 間隔の最小値、再生中シーク、一時停止中シークで暗転するか検証</span>
+        <span class="test-status" id="status-ff"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ff1" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ff1"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ff2" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ff2"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ff3" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ff3"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
+        </div>
+        <div class="test-body" style="aspect-ratio:16/9">
+          <video id="vid-ff4" playsinline muted style="visibility:hidden"></video>
+          <canvas id="cvs-ff4"></canvas>
+          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
+        </div>
+      </div>
+      <div class="btns">
+        <button onclick="ffPlayAndSeekTest(10, 'play')">10ms間隔 play</button>
+        <button onclick="ffPlayAndSeekTest(30, 'play')">30ms間隔 play</button>
+        <button onclick="ffPlayAndSeekTest(50, 'play')">50ms間隔 play</button>
+        <button onclick="ffSeekWhilePlaying(5)">再生中: +5秒シーク</button>
+        <button onclick="ffSeekWhilePlaying(-3)">再生中: -3秒シーク</button>
+        <button onclick="ffPauseAndSeek(5)">一時停止して+5秒シーク</button>
+      </div>
+    </div>
+
+    <hr style="border-color:#333;margin:12px 0">
+
     <!-- EE: 再生開始を時間差で呼ぶ (play() の順次実行) -->
     <div class="test-row" style="border-color:#a0f">
       <div class="test-header">
@@ -1044,6 +1085,106 @@ function stopRvfc(video) {
   }
 }
 
+// --- FF: シーク + 短い play() 間隔 ---
+const ffVids = [1,2,3,4].map(i => document.getElementById('vid-ff'+i));
+const ffCvs  = [1,2,3,4].map(i => document.getElementById('cvs-ff'+i));
+const ffPaused = [false,false,false,false];
+const ffT0 = [0,0,0,0];
+let ffLoaded = false;
+
+async function ffEnsureLoaded() {
+  if (ffLoaded) return;
+  if (!ccFiles.every(f => f)) throw new Error('CC のフォルダ選択が必要');
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(ccFiles[i]);
+    ffVids[i].src = URL.createObjectURL(blob);
+  }
+  await Promise.all(ffVids.map(v => new Promise(r => {
+    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
+  })));
+  ffLoaded = true;
+}
+
+function ffStartRvfc(video, canvas, idx) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (ffPaused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - ffT0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog('FF[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+}
+
+async function ffPlayAndSeekTest(intervalMs, mode) {
+  try { await ffEnsureLoaded(); } catch(e) { alert(e.message); return; }
+  ffPaused.fill(false);
+  // currentTime をリセット (再生位置を 0 に)
+  ffVids.forEach(v => v.currentTime = 0);
+  await new Promise(r => setTimeout(r, 100));
+  dlog('FF: ' + intervalMs + 'ms 間隔 play() テスト ===');
+  for (let i = 0; i < 4; i++) {
+    ffVids[i].play().then(() => dlog('FF[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('FF[' + ccCamNames[i] + ']: play() error: '+e.message));
+    ffStartRvfc(ffVids[i], ffCvs[i], i);
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  await new Promise(r => setTimeout(r, 5000));
+  ffVids.forEach((v, i) => {
+    dlog('FF[' + ccCamNames[i] + ']: 5秒後 ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + (v.currentTime < 0.1 ? ' ★再生失敗!' : ''));
+  });
+  document.getElementById('status-ff').textContent = '再生中。シークボタンを押してください';
+}
+
+function ffSeekWhilePlaying(deltaSec) {
+  dlog('FF: 再生中シーク ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒 ===');
+  ffVids.forEach((v, i) => {
+    ffT0[i] = performance.now();
+    const newTime = Math.max(0, v.currentTime + deltaSec);
+    dlog('FF[' + ccCamNames[i] + ']: シーク前 ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
+    v.currentTime = newTime;
+    ffPaused[i] = true;  // ログ取得モード ON
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - ffT0[i]).toFixed(0);
+      dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
+      // シーク後はログ ON にしておくが、5 秒後に OFF
+      setTimeout(() => { ffPaused[i] = false; }, 5000);
+    });
+  });
+}
+
+function ffPauseAndSeek(deltaSec) {
+  dlog('FF: 一時停止して ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒シーク ===');
+  ffVids.forEach((v, i) => {
+    ffT0[i] = performance.now();
+    v.pause();
+    const newTime = Math.max(0, v.currentTime + deltaSec);
+    dlog('FF[' + ccCamNames[i] + ']: pause+シーク ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
+    v.currentTime = newTime;
+    ffPaused[i] = true;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      const elapsed = (performance.now() - ffT0[i]).toFixed(0);
+      dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
+    });
+  });
+}
+
 // --- EE: play() を時間差で呼ぶ ---
 const eeVids = [1,2,3,4].map(i => document.getElementById('vid-ee'+i));
 const eeCvs  = [1,2,3,4].map(i => document.getElementById('cvs-ee'+i));
@@ -1976,7 +2117,7 @@ const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
 const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
 
 // ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd','ee'].forEach(id => {
+['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd','ee','ff'].forEach(id => {
   const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
   const s = document.getElementById('status-' + id);
   if (v && s) {
