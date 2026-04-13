@@ -58,6 +58,7 @@
       </div>
       <div class="btns" style="margin-top:4px">
         <span style="font-size:11px;color:#888;align-self:center">▼ playbackRate による回復時間の変化</span>
+        <button onclick="gTestPlaybackRateAll()">一括 (1.0 / 0.5 / 0.1 / 0.05)</button>
         <button onclick="gTestPlaybackRate(1.0)">rate=1.0</button>
         <button onclick="gTestPlaybackRate(0.5)">rate=0.5</button>
         <button onclick="gTestPlaybackRate(0.1)">rate=0.1</button>
@@ -977,6 +978,14 @@ async function gPattern4(round) {
   return await gMeasureTrace(playStart, cVids[0], cCvs[0], 'P4-回' + round);
 }
 
+// 4 種類の playbackRate を一括テスト
+async function gTestPlaybackRateAll() {
+  for (const r of [1.0, 0.5, 0.1, 0.05]) {
+    await gTestPlaybackRate(r);
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+
 // playbackRate を変えて暗転回復時間を計測
 async function gTestPlaybackRate(rate) {
   if (!files.every(f => f)) { alert('まずフォルダを選択してください'); return; }
@@ -1356,7 +1365,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 18:10)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 18:15)';
 </script>
 </body>
 </html>
