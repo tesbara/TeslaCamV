@@ -95,7 +95,7 @@
       catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
     }
   </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:35)';</script>
+  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 09:42)';</script>
   <div id="file-select">
     <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
   </div>
@@ -108,10 +108,9 @@
         <span class="test-status" id="status-cc"></span>
       </div>
       <div style="margin-bottom:6px">
-        <label style="display:inline-block;padding:6px 16px;background:#4af;color:#fff;border-radius:4px;cursor:pointer;font-size:13px">
+        <button onclick="ccPickDirectory()" style="padding:6px 16px;background:#4af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">
           📁 TeslaCam フォルダを選択
-          <input type="file" id="cc-dir-input" webkitdirectory directory style="display:none">
-        </label>
+        </button>
         <span id="cc-files-info" style="margin-left:8px;font-size:11px;color:#aaa"></span>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
@@ -978,18 +977,38 @@ const ccT0 = [0,0,0,0];
 const ccCamNames = ['front','back','left_repeater','right_repeater'];
 const ccFiles = [null,null,null,null];
 
-document.getElementById('cc-dir-input').addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files);
+async function ccPickDirectory() {
   const info = document.getElementById('cc-files-info');
+  if (!('showDirectoryPicker' in window)) {
+    alert('このブラウザは File System Access API に未対応です');
+    return;
+  }
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker();
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('フォルダ選択エラー: ' + e.message);
+    return;
+  }
+  // ディレクトリ内のファイルを列挙
+  const allFiles = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'file' && name.endsWith('.mp4')) {
+      allFiles.push({ name, handle });
+    }
+  }
   // 各カメラの最初のファイルを取得
   for (let i = 0; i < 4; i++) {
     const cam = ccCamNames[i];
-    const found = files.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
-    ccFiles[i] = found[0] || null;
+    const found = allFiles.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
+    if (found[0]) {
+      ccFiles[i] = await found[0].handle.getFile();
+    } else {
+      ccFiles[i] = null;
+    }
   }
   info.innerHTML = ccFiles.map((f, i) => ccCamNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
   if (ccFiles.every(f => f)) {
-    // 4 ファイル揃ったら video にロード
     dlog('CC: 4 カメラファイル ロード中...');
     for (let i = 0; i < 4; i++) {
       const blob = await mp4Faststart(ccFiles[i]);
@@ -998,7 +1017,7 @@ document.getElementById('cc-dir-input').addEventListener('change', async (e) => 
     dlog('CC: 4 カメラファイル ロード完了');
     info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備完了</span>';
   }
-});
+}
 
 function startRvfcWithReadyStateCC(video, canvas, idx) {
   const ctx = canvas.getContext('2d');
