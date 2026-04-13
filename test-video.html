@@ -44,6 +44,26 @@
 
   <div id="tests">
 
+    <!-- D: 各ディレクトリの暗転判定サマリ -->
+    <div class="test-row" style="border-color:#0ff">
+      <div class="test-header">
+        <span class="test-label" style="color:#0ff">D: 各ディレクトリ暗転判定サマリ</span>
+        <span class="test-desc">親フォルダを選択し、各サブディレクトリの代表ファイル 1 つで暗転判定を実行 (SPS 解析 + 実測)</span>
+        <span class="test-status" id="status-d"></span>
+      </div>
+      <div style="margin-bottom:6px">
+        <button onclick="dScanAll(10)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (最大10件)</button>
+        <button onclick="dScanAll(30)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (最大30件)</button>
+        <button onclick="dScanAll(999)" style="padding:6px 14px;background:#0ff;color:#000;border:none;border-radius:4px;cursor:pointer">親フォルダ選択 (全件)</button>
+      </div>
+      <!-- 判定中の 1 台だけの video -->
+      <div class="test-body" style="max-width:240px;aspect-ratio:16/9">
+        <video id="vid-d" playsinline muted style="visibility:hidden"></video>
+        <canvas id="cvs-d"></canvas>
+      </div>
+      <div id="d-table" style="margin-top:8px;font-size:11px"></div>
+    </div>
+
     <!-- C: 再生開始時の seekTo 影響 (最新) -->
     <div class="test-row" style="border-color:#f0f">
       <div class="test-header">
@@ -793,7 +813,219 @@ async function cPositionTest(positions) {
   document.getElementById('status-c').textContent = '位置変動テスト完了';
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 14:20)';
+// =====================================================================
+// D: 各ディレクトリ暗転判定サマリ
+// =====================================================================
+const dVid = document.getElementById('vid-d');
+const dCvs = document.getElementById('cvs-d');
+let dRvfcStarted = false;
+
+function ensureDRvfc() {
+  if (dRvfcStarted) return;
+  const ctx = dCvs.getContext('2d');
+  function loop() {
+    if (dVid.videoWidth > 0 && dVid.videoHeight > 0) {
+      if (dCvs.width !== dVid.videoWidth || dCvs.height !== dVid.videoHeight) {
+        dCvs.width = dVid.videoWidth; dCvs.height = dVid.videoHeight;
+      }
+      ctx.drawImage(dVid, 0, 0, dVid.videoWidth, dVid.videoHeight);
+    }
+    if ('requestVideoFrameCallback' in dVid) dVid.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in dVid) dVid.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+  dRvfcStarted = true;
+}
+
+// SPS 解析: VUI の有無と video_full_range_flag を返す
+function analyzeSpsFromBlob(blob) {
+  return blob.arrayBuffer().then(buffer => {
+    const boxes = parseTopLevelBoxes(buffer);
+    const moov = boxes.find(b => b.type === 'moov');
+    if (!moov) return { hasVui: null, fullRange: null, err: 'no moov' };
+    const buf = new Uint8Array(buffer.slice(moov.offset, moov.offset + moov.size));
+    let result = { hasVui: null, fullRange: null };
+    function u32(o){return(buf[o]<<24)|(buf[o+1]<<16)|(buf[o+2]<<8)|buf[o+3];}
+    function bt(o){return String.fromCharCode(buf[o+4],buf[o+5],buf[o+6],buf[o+7]);}
+    function traverse(s,e){let p=s;while(p+8<=e){const sz=u32(p),t=bt(p);if(sz<8||p+sz>e)break;
+      if(['trak','mdia','minf','stbl'].includes(t))traverse(p+8,p+sz);
+      else if(t==='stsd')traverse(p+16,p+sz);else if(t==='avc1')traverse(p+86,p+sz);
+      else if(t==='avcC')scanAvcC(p+8,p+sz);p+=sz;}}
+    function scanAvcC(s,e){if(s+6>e)return;const n=buf[s+5]&0x1F;let o=s+6;
+      for(let i=0;i<n;i++){if(o+2>e)return;const l=(buf[o]<<8)|buf[o+1];o+=2;if(o+l>e)return;
+        const r=scanSps(buf.subarray(o,o+l)); if(r && result.hasVui===null){result=r;} o+=l;}}
+    function scanSps(sps) {
+      let bp=8; const tb=sps.length*8;
+      function rb(){if(bp>=tb)return 0;const v=(sps[bp>>3]>>(7-(bp&7)))&1;bp++;return v;}
+      function rbs(n){let v=0;for(let i=0;i<n;i++)v=(v<<1)|rb();return v;}
+      function rue(){let z=0;while(rb()===0&&z<32)z++;return(1<<z)-1+rbs(z);}
+      function rse(){const v=rue();return(v&1)?(v+1)>>1:-(v>>1);}
+      try{const p=rbs(8);rbs(8);rbs(8);rue();
+        if([100,110,122,244,44,83,86,118,128,138,139,134].includes(p)){const cf=rue();if(cf===3)rb();rue();rue();rb();if(rb())return {hasVui:null};}
+        rue();const pt=rue();if(pt===0)rue();else if(pt===1){rb();rse();rse();const n=rue();for(let i=0;i<n;i++)rse();}
+        rue();rb();rue();rue();if(!rb())rb();rb();if(rb()){rue();rue();rue();rue();}
+        const vp=rb();
+        if(!vp) return {hasVui:false, fullRange:null};
+        // VUI 解析 (full_range_flag まで)
+        if(rb()){ // aspect_ratio_info_present_flag
+          const aspectIdc = rbs(8);
+          if(aspectIdc === 255){ rbs(16); rbs(16); }
+        }
+        if(rb()) rb(); // overscan_info_present_flag → overscan_appropriate_flag
+        if(rb()){ // video_signal_type_present_flag
+          rbs(3); // video_format
+          const fullRange = rb();
+          return {hasVui:true, fullRange:!!fullRange};
+        }
+        return {hasVui:true, fullRange:null};
+      }catch(e){return {hasVui:null, err:e.message};}
+    }
+    traverse(8, buf.length);
+    return result;
+  });
+}
+
+// 1 ファイルで実測: 再生開始 → 500ms と 1000ms で brightness 測定 → pause
+async function measureOneFile(file) {
+  const blob = await mp4Faststart(file);
+  const oldUrl = dVid.src;
+  dVid.src = URL.createObjectURL(blob);
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  // loadeddata 待ち
+  await new Promise(r => {
+    const onLoaded = () => { dVid.removeEventListener('loadeddata', onLoaded); r(); };
+    dVid.addEventListener('loadeddata', onLoaded);
+    setTimeout(r, 5000);  // タイムアウト
+  });
+  ensureDRvfc();
+  dVid.currentTime = 0;
+  await new Promise(r => {
+    const onSeeked = () => { dVid.removeEventListener('seeked', onSeeked); r(); };
+    dVid.addEventListener('seeked', onSeeked);
+    setTimeout(r, 2000);
+  });
+  await new Promise(r => setTimeout(r, 100));
+  // 再生開始
+  const playStart = performance.now();
+  try { await dVid.play(); } catch (e) { return { err: e.message }; }
+  // 500ms と 1000ms で measure
+  await new Promise(r => setTimeout(r, 500));
+  const b500 = measureBrightnessFull(dCvs);
+  const ct500 = dVid.currentTime;
+  await new Promise(r => setTimeout(r, 500));
+  const b1000 = measureBrightnessFull(dCvs);
+  const ct1000 = dVid.currentTime;
+  dVid.pause();
+  return { b500, ct500, b1000, ct1000 };
+}
+
+// サブディレクトリを再帰的に探して、mp4 を含むものをリスト化
+async function collectDirsWithMp4(handle, path = '') {
+  const dirs = [];
+  let hasMp4 = false;
+  const children = [];
+  for await (const [name, h] of handle.entries()) {
+    if (h.kind === 'file' && name.endsWith('.mp4')) hasMp4 = true;
+    else if (h.kind === 'directory') children.push([name, h]);
+  }
+  if (hasMp4) dirs.push({ path, handle });
+  for (const [name, h] of children) {
+    const sub = await collectDirsWithMp4(h, path ? path + '/' + name : name);
+    dirs.push(...sub);
+  }
+  return dirs;
+}
+
+// ディレクトリから代表ファイル 1 つを選ぶ (サイズ >= 閾値 の front 優先)
+async function pickRepresentativeFile(dirHandle, minSize = 5 * 1024 * 1024) {
+  const candidates = [];
+  for await (const [name, h] of dirHandle.entries()) {
+    if (h.kind !== 'file' || !name.endsWith('.mp4')) continue;
+    const f = await h.getFile();
+    if (f.size < minSize) continue;
+    candidates.push({ name, f });
+  }
+  if (candidates.length === 0) return null;
+  // front を優先、次にサイズ最大
+  const front = candidates.find(c => c.name.includes('front'));
+  if (front) return front.f;
+  candidates.sort((a, b) => b.f.size - a.f.size);
+  return candidates[0].f;
+}
+
+async function dScanAll(maxCount) {
+  const tableEl = document.getElementById('d-table');
+  const statusEl = document.getElementById('status-d');
+  if (!('showDirectoryPicker' in window)) { alert('File System Access API 未対応'); return; }
+  let rootHandle;
+  try { rootHandle = await window.showDirectoryPicker(); }
+  catch (e) { if (e.name !== 'AbortError') alert('エラー: ' + e.message); return; }
+  statusEl.textContent = 'ディレクトリ走査中...';
+  const dirs = await collectDirsWithMp4(rootHandle);
+  dlog('D: ' + dirs.length + ' 個のディレクトリ発見、最大 ' + maxCount + ' 件を処理');
+  const targets = dirs.slice(0, maxCount);
+  const results = [];
+  let rows = '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">#</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">ディレクトリ</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">ファイル</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">サイズ</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">SPS VUI</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">full_range</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">b500ms</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">b1000ms</th>' +
+    '<th style="text-align:left;padding:4px;border:1px solid #444">判定</th>' +
+    '</tr></thead><tbody></tbody></table>';
+  tableEl.innerHTML = rows;
+  const tbody = tableEl.querySelector('tbody');
+
+  for (let i = 0; i < targets.length; i++) {
+    const dir = targets[i];
+    statusEl.textContent = (i+1) + '/' + targets.length + ': ' + dir.path + ' 処理中...';
+    const file = await pickRepresentativeFile(dir.handle);
+    if (!file) {
+      tbody.innerHTML += `<tr><td style="padding:4px;border:1px solid #444">${i+1}</td><td style="padding:4px;border:1px solid #444">${dir.path}</td><td colspan="7" style="padding:4px;border:1px solid #444;color:#888">(大きいファイルなし)</td></tr>`;
+      continue;
+    }
+    let sps, measure;
+    try {
+      const blob = await mp4Faststart(file);
+      sps = await analyzeSpsFromBlob(blob);
+      measure = await measureOneFile(file);
+    } catch (e) {
+      tbody.innerHTML += `<tr><td style="padding:4px;border:1px solid #444">${i+1}</td><td style="padding:4px;border:1px solid #444">${dir.path}</td><td style="padding:4px;border:1px solid #444">${file.name}</td><td colspan="6" style="padding:4px;border:1px solid #444;color:#f88">ERR: ${e.message}</td></tr>`;
+      continue;
+    }
+    const r = { dir: dir.path, file: file.name, size: file.size, sps, measure };
+    results.push(r);
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    const vuiStr = sps.hasVui === true ? 'あり' : sps.hasVui === false ? 'なし' : '?';
+    const frStr = sps.fullRange === true ? '1 (full)' : sps.fullRange === false ? '0 (limited)' : '?';
+    const b500 = measure.b500 ?? '-';
+    const b1000 = measure.b1000 ?? '-';
+    const isDark = measure.b500 !== undefined && measure.b500 <= 5;
+    const dotenStr = isDark ? '★暗転' : '正常';
+    const dotenColor = isDark ? '#f88' : '#8f8';
+    tbody.innerHTML += `<tr>` +
+      `<td style="padding:4px;border:1px solid #444">${i+1}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${dir.path}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${file.name}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${sizeMB}MB</td>` +
+      `<td style="padding:4px;border:1px solid #444">${vuiStr}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${frStr}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${b500}</td>` +
+      `<td style="padding:4px;border:1px solid #444">${b1000}</td>` +
+      `<td style="padding:4px;border:1px solid #444;color:${dotenColor}">${dotenStr}</td>` +
+      `</tr>`;
+    dlog('D: ' + (i+1) + '/' + targets.length + ' ' + dir.path + ' VUI=' + vuiStr + ' full=' + frStr + ' b500=' + b500 + ' b1000=' + b1000 + ' ' + dotenStr);
+    await new Promise(r => setTimeout(r, 200));
+  }
+  statusEl.textContent = '完了 (' + results.length + ' 件)';
+  dlog('D: ' + results.length + ' 件の判定完了');
+}
+
+document.getElementById('build-time').textContent = '(build: 2026-04-13 14:35)';
 </script>
 </body>
 </html>
