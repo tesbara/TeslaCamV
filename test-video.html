@@ -255,12 +255,11 @@ async function pickDirectory() {
   info.innerHTML = files.map((f, i) => camNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
   if (files.every(f => f)) {
     info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備中…</span>';
-    // A, B, C 用に video にロード
-    await loadVideos(aVids);
-    await loadVideos(bVids);
+    // C 用のみロード (A, B, C の 12 video を同時ロードすると Android のリソース制限で
+    // rs=0 のまま data が入らないため、現在調査中の C 専用にリソースを割り当てる)
     await loadVideos(cVids);
-    info.innerHTML = info.innerHTML.replace('準備中…', '準備完了');
-    dlog('ファイル準備完了');
+    info.innerHTML = info.innerHTML.replace('準備中…', '準備完了 (C のみ有効)');
+    dlog('ファイル準備完了 (C のみ)');
   }
 }
 
@@ -573,7 +572,7 @@ async function cAutoTest(mode, pauseDelayMs) {
   document.getElementById('status-c').textContent = '完了: ' + results;
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 11:51)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 12:00)';
 </script>
 </body>
 </html>
