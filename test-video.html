@@ -6,1686 +6,174 @@
   <title>暗転切り分けテスト</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: sans-serif;
-      background: #1a1a1a;
-      color: #fff;
-      padding: 12px;
-    }
-    h1 { font-size: 16px; margin-bottom: 8px; text-align: center; }
-    #file-select { text-align: center; margin-bottom: 12px; }
-    #file-select label {
-      display: inline-block;
-      padding: 8px 20px;
-      background: #4af;
-      color: #fff;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    #file-input { display: none; }
-    #tests { display: none; }
-    .test-row {
-      border: 1px solid #333;
-      border-radius: 8px;
-      margin-bottom: 10px;
-      padding: 8px;
-    }
-    .test-header {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
+    body { font-family: sans-serif; background: #1a1a1a; color: #fff; padding: 12px; }
+    .test-row { border: 1px solid #333; border-radius: 8px; margin-bottom: 10px; padding: 8px; }
+    .test-header { font-size: 13px; font-weight: bold; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .test-label { color: #4af; }
     .test-desc { color: #aaa; font-weight: normal; font-size: 12px; }
     .test-status { color: #888; font-size: 12px; margin-left: auto; }
-    .test-body {
-      position: relative;
-      width: 100%;
-      max-width: 480px;
-      aspect-ratio: 16/9;
-      background: #000;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .test-body video {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    .test-body canvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      z-index: 10;
-    }
-    .btns {
-      margin-top: 6px;
-      display: flex;
-      gap: 6px;
-    }
-    .btns button {
-      padding: 4px 14px;
-      font-size: 13px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      background: #555;
-      color: #fff;
-    }
+    .test-body { position: relative; width: 100%; max-width: 480px; aspect-ratio: 16/9; background: #000; border-radius: 4px; overflow: hidden; }
+    .test-body video { width: 100%; height: 100%; object-fit: contain; }
+    .test-body canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 10; }
+    .quad { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 480px; }
+    .quad .test-body { aspect-ratio: 16/9; }
+    .cam-label { position: absolute; bottom: 2px; left: 2px; font-size: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 1px 4px; }
+    .btns { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .btns button { padding: 4px 14px; font-size: 13px; border: none; border-radius: 4px; cursor: pointer; background: #555; color: #fff; }
     .btns button:hover { background: #666; }
+    #dbg-log { margin-top: 8px; padding: 6px; background: #111; border-radius: 4px; font-size: 10px; color: #8f8; max-height: 200px; overflow-y: auto; white-space: pre-wrap; display: none; }
   </style>
 </head>
 <body>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     <h1 style="font-size:16px;margin:0">暗転切り分けテスト <span style="color:#888;font-size:12px" id="build-time"></span></h1>
     <button onclick="copyDlog()" style="padding:6px 14px;font-size:13px;background:#080;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold">📋 ログコピー</button>
-    <button onclick="dbgLog.textContent='';alert('ログクリア')" style="padding:6px 14px;font-size:13px;background:#800;color:#fff;border:none;border-radius:4px;cursor:pointer">🗑 ログクリア</button>
+    <button onclick="document.getElementById('dbg-log').textContent='';alert('ログクリア')" style="padding:6px 14px;font-size:13px;background:#800;color:#fff;border:none;border-radius:4px;cursor:pointer">🗑 ログクリア</button>
   </div>
-  <div style="position:fixed;bottom:8px;right:8px;z-index:9999;display:flex;gap:4px">
-    <button onclick="copyDlog()" style="padding:6px 14px;font-size:13px;background:#080;color:#fff;border:1px solid #fff;border-radius:4px;cursor:pointer;font-weight:bold">📋 ログコピー</button>
-    <button onclick="dbgLog.textContent='';alert('ログクリア')" style="padding:6px 14px;font-size:13px;background:#800;color:#fff;border:1px solid #fff;border-radius:4px;cursor:pointer">🗑</button>
+
+  <!-- フォルダ選択 (最上部) -->
+  <div class="test-row" style="border-color:#4af">
+    <div class="test-header">
+      <span class="test-label">📁 TeslaCam フォルダ選択</span>
+      <span class="test-desc">front / back / left_repeater / right_repeater の 4 ファイルを自動取得</span>
+      <span class="test-status" id="status-files"></span>
+    </div>
+    <button onclick="pickDirectory()" style="padding:8px 20px;background:#4af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px">フォルダを選択</button>
+    <div id="files-info" style="margin-top:6px;font-size:11px;color:#aaa"></div>
   </div>
-  <script>
-    async function copyDlog() {
-      const txt = document.getElementById('dbg-log').textContent;
-      try { await navigator.clipboard.writeText(txt); alert('ログをコピーしました ('+txt.split('\n').length+'行)'); }
-      catch(e) { alert('コピー失敗: '+e.message+'\n\n'+txt.slice(0,500)); }
-    }
-  </script>
-  <script>document.getElementById('build-time').textContent = '(build: 2026-04-13 11:10)';</script>
-  <div id="file-select">
-    <label>動画ファイルを選択<input type="file" id="file-input" accept="video/*"></label>
-  </div>
-  <div id="tests">
-    <!-- FF: シーク + より短い play() 間隔の検証 -->
-    <div class="test-row" style="border-color:#ff8">
-      <div class="test-header">
-        <span class="test-label" style="color:#ff8">FF: シーク + 短い play() 間隔</span>
-        <span class="test-desc">CC のファイル使用。play() 間隔の最小値、再生中シーク、一時停止中シークで暗転するか検証</span>
-        <span class="test-status" id="status-ff"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ff1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ff1"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ff2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ff2"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ff3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ff3"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ff4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ff4"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="ffPlayAndSeekTest(10, 'play')">10ms間隔 play</button>
-        <button onclick="ffPlayAndSeekTest(30, 'play')">30ms間隔 play</button>
-        <button onclick="ffPlayAndSeekTest(50, 'play')">50ms間隔 play</button>
-        <button onclick="ffSeekWhilePlaying(5, 0)">再生中:+5秒シーク同時</button>
-        <button onclick="ffSeekWhilePlaying(5, 100)">再生中:+5秒シーク 100ms間隔</button>
-        <button onclick="ffSeekWhilePlaying(-3, 100)">再生中:-3秒シーク 100ms間隔</button>
-        <button onclick="ffPauseAndSeek(5, 0)">pause+5秒シーク同時</button>
-        <button onclick="ffPauseAndSeek(5, 100)">pause+5秒シーク 100ms間隔</button>
-        <button onclick="ffPauseAndSeek(5, 200)">pause+5秒シーク 200ms間隔</button>
-      </div>
-    </div>
 
-    <hr style="border-color:#333;margin:12px 0">
+  <div id="tests" style="display:none">
 
-    <!-- EE: 再生開始を時間差で呼ぶ (play() の順次実行) -->
-    <div class="test-row" style="border-color:#a0f">
-      <div class="test-header">
-        <span class="test-label" style="color:#a0f">EE: play() を時間差で呼ぶ</span>
-        <span class="test-desc">CC のファイルを使用。play() を 200ms 間隔で順次呼んで、全 video が正常開始するか確認</span>
-        <span class="test-status" id="status-ee"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ee1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ee1"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ee2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ee2"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ee3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ee3"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-ee4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-ee4"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="eeAutoTest(0)">同時 play() (比較用)</button>
-        <button onclick="eeAutoTest(100)">100ms 間隔で play()</button>
-        <button onclick="eeAutoTest(200)">200ms 間隔で play()</button>
-        <button onclick="eeAutoTest(500)">500ms 間隔で play()</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- DD: CC と同じ + pause のみ (currentTime 再セットしない) -->
-    <div class="test-row" style="border-color:#fa0">
-      <div class="test-header">
-        <span class="test-label" style="color:#fa0">DD: 4 カメラ + pause のみ (currentTime 再セットしない)</span>
-        <span class="test-desc">CC と同じファイルを使用。pause だけ呼んで currentTime を一切セットしない。これで暗転するか?</span>
-        <span class="test-status" id="status-dd"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-dd1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-dd1"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-dd2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-dd2"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-dd3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-dd3"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-dd4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-dd4"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="ddAutoTest(30)">自動: 30秒再生→pause のみ</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- CC: ディレクトリ選択 + 4 カメラ別ファイル -->
-    <div class="test-row" style="border-color:#0ff">
-      <div class="test-header">
-        <span class="test-label" style="color:#0ff">CC: 4 カメラ別ファイル (本体と同じファイル構成)</span>
-        <span class="test-desc">TeslaCam フォルダから front/back/left_repeater/right_repeater の 4 ファイルを自動割り当て</span>
-        <span class="test-status" id="status-cc"></span>
-      </div>
-      <div style="margin-bottom:6px">
-        <button onclick="ccPickDirectory()" style="padding:6px 16px;background:#4af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">
-          📁 TeslaCam フォルダを選択
-        </button>
-        <span id="cc-files-info" style="margin-left:8px;font-size:11px;color:#aaa"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-cc1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-cc1"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">front</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-cc2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-cc2"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">back</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-cc3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-cc3"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">left_repeater</div>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-cc4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-cc4"></canvas>
-          <div style="position:absolute;bottom:2px;left:2px;font-size:10px;background:rgba(0,0,0,0.6);color:#fff;padding:1px 4px">right_repeater</div>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="ccPlay()">4 video 再生</button>
-        <button onclick="ccPauseAndSeek()">一時停止 + seekTo</button>
-        <button onclick="ccAutoTest(30)">自動: 30秒再生→pause</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- BB: 8 video (4 表示 + 4 idle = 本体と同じ video 数) -->
-    <div class="test-row" style="border-color:#f0f">
-      <div class="test-header">
-        <span class="test-label" style="color:#f0f">BB: 8 video (本体の MsePlayer 数 x2 を再現)</span>
-        <span class="test-desc">表示用 4 video + idle (src あり) 4 video。本体は MsePlayer ごとに _captureVideo を持つので合計 8 video</span>
-        <span class="test-status" id="status-bb"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-bb1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-bb1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-bb2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-bb2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-bb3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-bb3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-bb4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-bb4"></canvas>
-        </div>
-      </div>
-      <div style="font-size:11px;color:#888;margin-top:4px">+ 非表示 idle video 4 個 (src あり、preload=auto)</div>
-      <div class="btns">
-        <button onclick="bbPlay()">4 video 再生 (idle 4 個も裏で確保)</button>
-        <button onclick="bbPauseAndSeek()">一時停止 + seekTo</button>
-        <button onclick="bbAutoTest(30)">自動: 30秒再生→pause</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- AA: 5 video + rVFC 継続 + pause + seekTo + readyState ログ -->
+    <!-- A: pause+シーク (内部 play で復帰) -->
     <div class="test-row" style="border-color:#0f0">
       <div class="test-header">
-        <span class="test-label" style="color:#0f0">AA: 5 video + readyState ログ</span>
-        <span class="test-desc">本体と同じ 5 video。pause 後 currentTime 再セット → rVFC で readyState と brightness を記録</span>
-        <span class="test-status" id="status-aa"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:600px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-aa1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-aa1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-aa2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-aa2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-aa3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-aa3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-aa4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-aa4"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-aa5" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-aa5"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="aaPlay()">5 video 再生</button>
-        <button onclick="aaPauseAndSeek()">一時停止 + seekTo (rVFC継続)</button>
-        <button onclick="aaAutoTest(30)">自動: 30秒再生→pause</button>
-        <button onclick="aaAutoTest(60)">自動: 60秒再生→pause</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- Z: rVFC を止めずに pause + seekTo (本体と同じ動作) -->
-    <div class="test-row" style="border-color:#f80">
-      <div class="test-header">
-        <span class="test-label" style="color:#f80">Z: rVFC 継続中の pause+seekTo (本体再現)</span>
-        <span class="test-desc">rVFC ループを止めずに pause + currentTime 再セット → rVFC が drawImage する時の輝度を記録</span>
-        <span class="test-status" id="status-z"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-z1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-z1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-z2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-z2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-z3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-z3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-z4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-z4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="zPlay()">4 video 再生</button>
-        <button onclick="zPauseAndSeek()">一時停止 + seekTo (rVFC継続)</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- Y: seeked 遅延 + drawImage 輝度測定 (本体ログ再現) -->
-    <div class="test-row" style="border-color:#ff0">
-      <div class="test-header">
-        <span class="test-label" style="color:#ff0">Y: seeked 遅延 + 輝度測定</span>
-        <span class="test-desc">pause + currentTime 再セット → seeked タイミング記録 → drawImage 後の輝度を測定</span>
-        <span class="test-status" id="status-y"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-y1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-y1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-y2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-y2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-y3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-y3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-y4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-y4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="yPlay()">4 video 再生</button>
-        <button onclick="yPauseAndSeek()">一時停止 + seekTo + 輝度測定</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- V: src を複数回差し替え後に pause -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">V: src 複数回差し替え (セグメント切替再現)</span>
-        <span class="test-desc">同じファイルで Blob URL を作り直して src を 3 回差し替え → 最後に一時停止</span>
-        <span class="test-status" id="status-v"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-v" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-v"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="vMultiSwap(3)">3 回差し替え+再生</button>
-        <button onclick="vMultiSwap(6)">6 回差し替え+再生</button>
-        <button onclick="V.v.pause()">一時停止</button>
-        <button onclick="vPauseFull()">一時停止 (full)</button>
-      </div>
-    </div>
-
-    <!-- W: src 複数回差し替え + 自動シーケンス (再生→5秒→一時停止→結果表示) -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">W: 自動テスト (差し替え→再生→5秒→pause)</span>
-        <span class="test-desc">src を 3 回差し替え → 再生 → 5 秒後に自動一時停止 → さらに 2 秒待って canvas をキャプチャし輝度を測定</span>
-        <span class="test-status" id="status-w"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-w" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-w"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="wAutoTest()">自動テスト開始</button>
-      </div>
-    </div>
-
-    <!-- X: 4 video で src 複数回差し替え + full pause -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">X: 4 video + src 複数回差し替え</span>
-        <span class="test-desc">4 video 同時に src を 3 回差し替え → 再生 → 一時停止 (full)</span>
-        <span class="test-status" id="status-x"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-x1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-x1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-x2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-x2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-x3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-x3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-x4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-x4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="xMultiSwap()">4 video x3 回差し替え+再生</button>
-        <button onclick="xPauseFull()">全て一時停止 (full)</button>
-      </div>
-    </div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- Q: src 差し替え後に pause -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">Q: src 差し替え後に pause</span>
-        <span class="test-desc">Blob URL → 再生 → 同じファイルで新 Blob URL に差し替え → 再生 → 一時停止</span>
-        <span class="test-status" id="status-q"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-q" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-q"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="qSwapAndPlay()">src 差し替え+再生</button>
-        <button onclick="V.q.pause()">一時停止</button>
-      </div>
-    </div>
-
-    <!-- R: rVFC 停止型 -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">R: rVFC 停止型 Canvas</span>
-        <span class="test-desc">再生中は rVFC で転写。pause で rVFC 停止 → seeked で 1 回だけキャプチャ</span>
-        <span class="test-status" id="status-r"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-r" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-r"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="rPlay()">再生</button>
-        <button onclick="rPause()">一時停止</button>
-      </div>
-    </div>
-
-    <!-- S: フル再現 -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">S: フル再現</span>
-        <span class="test-desc">src 差し替え→再生→pause→rVFC停止→clearRect→visibility hidden→seeked→visible+drawImage</span>
-        <span class="test-status" id="status-s"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-s" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-s"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="sSwapAndPlay()">src 差し替え+再生</button>
-        <button onclick="sPause()">一時停止 (full)</button>
-      </div>
-    </div>
-
-    <!-- T: 全部入り x4 -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">T: 全部入り x4</span>
-        <span class="test-desc">4 video 同時。src 差し替え+rVFC 停止+clearRect+visibility 切替+seeked+drawImage</span>
-        <span class="test-status" id="status-t"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-t1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-t1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-t2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-t2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-t3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-t3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-t4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-t4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="tSwapAndPlay()">全 src 差し替え+再生</button>
-        <button onclick="tPause()">全て一時停止 (full)</button>
-      </div>
-    </div>
-
-    <div id="dbg-log" style="margin:8px 0;padding:6px;background:#111;border-radius:4px;font-size:10px;color:#8f8;max-height:150px;overflow-y:auto;white-space:pre-wrap;display:none"></div>
-
-    <hr style="border-color:#333;margin:12px 0">
-
-    <!-- A -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">A: 素の video</span>
-        <span class="test-desc">File → createObjectURL → video.src</span>
+        <span class="test-label" style="color:#0f0">A: pause+シーク (内部 play で復帰)</span>
+        <span class="test-desc">シーク時に内部的に play して 1 秒待ってから pause。再生中シークと同じく自動復帰</span>
         <span class="test-status" id="status-a"></span>
       </div>
-      <div class="test-body"><video id="vid-a" playsinline muted></video></div>
+      <div class="quad">
+        <div class="test-body"><video id="vid-a1" playsinline muted style="visibility:hidden"></video><canvas id="cvs-a1"></canvas><div class="cam-label">front</div></div>
+        <div class="test-body"><video id="vid-a2" playsinline muted style="visibility:hidden"></video><canvas id="cvs-a2"></canvas><div class="cam-label">back</div></div>
+        <div class="test-body"><video id="vid-a3" playsinline muted style="visibility:hidden"></video><canvas id="cvs-a3"></canvas><div class="cam-label">left_repeater</div></div>
+        <div class="test-body"><video id="vid-a4" playsinline muted style="visibility:hidden"></video><canvas id="cvs-a4"></canvas><div class="cam-label">right_repeater</div></div>
+      </div>
       <div class="btns">
-        <button onclick="V.a.play()">再生</button>
-        <button onclick="V.a.pause()">一時停止</button>
+        <button onclick="aPlay(50)">50ms間隔 play</button>
+        <button onclick="aPlay(100)">100ms間隔 play</button>
+        <button onclick="aPause()">単純 pause</button>
+        <button onclick="aPauseAndSeekRecover(5)">pause+5秒シーク (内部play復帰)</button>
+        <button onclick="aPauseAndSeekRecover(-3)">pause-3秒シーク (内部play復帰)</button>
+        <button onclick="aPauseAndSeekDirect(5)">pause+5秒シーク (素のまま=暗転確認)</button>
       </div>
     </div>
 
-    <!-- B -->
-    <div class="test-row">
+    <!-- B: 再生中シーク (順次) -->
+    <div class="test-row" style="border-color:#fa0">
       <div class="test-header">
-        <span class="test-label">B: mp4Faststart</span>
-        <span class="test-desc">moov 移動 + VUI パッチ → Blob URL</span>
+        <span class="test-label" style="color:#fa0">B: 再生中シーク</span>
+        <span class="test-desc">再生中に currentTime を変更。同時 vs 順次の比較</span>
         <span class="test-status" id="status-b"></span>
       </div>
-      <div class="test-body"><video id="vid-b" playsinline muted></video></div>
+      <div class="quad">
+        <div class="test-body"><video id="vid-b1" playsinline muted style="visibility:hidden"></video><canvas id="cvs-b1"></canvas><div class="cam-label">front</div></div>
+        <div class="test-body"><video id="vid-b2" playsinline muted style="visibility:hidden"></video><canvas id="cvs-b2"></canvas><div class="cam-label">back</div></div>
+        <div class="test-body"><video id="vid-b3" playsinline muted style="visibility:hidden"></video><canvas id="cvs-b3"></canvas><div class="cam-label">left_repeater</div></div>
+        <div class="test-body"><video id="vid-b4" playsinline muted style="visibility:hidden"></video><canvas id="cvs-b4"></canvas><div class="cam-label">right_repeater</div></div>
+      </div>
       <div class="btns">
-        <button onclick="V.b.play()">再生</button>
-        <button onclick="V.b.pause()">一時停止</button>
+        <button onclick="bPlay()">100ms間隔 play</button>
+        <button onclick="bSeek(5, 0)">+5秒シーク 同時</button>
+        <button onclick="bSeek(5, 100)">+5秒シーク 100ms間隔</button>
+        <button onclick="bSeek(-3, 100)">-3秒シーク 100ms間隔</button>
       </div>
     </div>
 
-    <!-- C -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">C: Canvas 転写 (video 可視)</span>
-        <span class="test-desc">素の video + rVFC で Canvas に drawImage (video も見える)</span>
-        <span class="test-status" id="status-c"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-c" playsinline muted></video>
-        <canvas id="cvs-c"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.c.play()">再生</button>
-        <button onclick="V.c.pause()">一時停止</button>
-      </div>
-    </div>
-
-    <!-- D -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">D: Canvas のみ (video 非表示)</span>
-        <span class="test-desc">video を visibility:hidden にして Canvas だけ表示</span>
-        <span class="test-status" id="status-d"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-d" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-d"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.d.play()">再生</button>
-        <button onclick="V.d.pause()">一時停止</button>
-      </div>
-    </div>
-
-    <!-- E -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">E: mp4Faststart + Canvas のみ</span>
-        <span class="test-desc">moov 移動 + VUI パッチ + video 非表示 + Canvas</span>
-        <span class="test-status" id="status-e"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-e" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-e"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.e.play()">再生</button>
-        <button onclick="V.e.pause()">一時停止</button>
-      </div>
-    </div>
-
-    <!-- F -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">F: pause 後に currentTime 再セット</span>
-        <span class="test-desc">素の video + pause() 直後に currentTime = currentTime で再シーク</span>
-        <span class="test-status" id="status-f"></span>
-      </div>
-      <div class="test-body"><video id="vid-f" playsinline muted></video></div>
-      <div class="btns">
-        <button onclick="V.f.play()">再生</button>
-        <button onclick="pauseAndReseek(V.f, 'status-f')">一時停止+再シーク</button>
-      </div>
-    </div>
-
-    <!-- G -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">G: pause+seeked後キャプチャ (素)</span>
-        <span class="test-desc">pause 後 currentTime 再セット → seeked で video→canvas に drawImage</span>
-        <span class="test-status" id="status-g"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-g" playsinline muted></video>
-        <canvas id="cvs-g"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.g.play()">再生</button>
-        <button onclick="pauseReseekCapture(V.g, document.getElementById('cvs-g'), 'status-g')">一時停止+seeked後キャプチャ</button>
-      </div>
-    </div>
-
-    <!-- H -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">H: pause+seeked後キャプチャ (video 非表示)</span>
-        <span class="test-desc">同上 + video を visibility:hidden にして Canvas だけ表示</span>
-        <span class="test-status" id="status-h"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-h" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-h"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.h.play()">再生</button>
-        <button onclick="pauseReseekCapture(V.h, document.getElementById('cvs-h'), 'status-h')">一時停止+seeked後キャプチャ</button>
-      </div>
-    </div>
-
-    <!-- I -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">I: mp4Faststart+pause+seeked後キャプチャ+Canvas</span>
-        <span class="test-desc">mp4Faststart + pause + seeked 後 drawImage + video 非表示 (TeslaCamV 最接近)</span>
-        <span class="test-status" id="status-i"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-i" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-i"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.i.play()">再生</button>
-        <button onclick="pauseReseekCapture(V.i, document.getElementById('cvs-i'), 'status-i')">一時停止+seeked後キャプチャ</button>
-      </div>
-    </div>
-
-    <!-- J -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">J: 4 video 同時 (素)</span>
-        <span class="test-desc">同じ動画を 4 つの video 要素で同時再生・一時停止</span>
-        <span class="test-status" id="status-j"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9"><video id="vid-j1" playsinline muted></video></div>
-        <div class="test-body" style="aspect-ratio:16/9"><video id="vid-j2" playsinline muted></video></div>
-        <div class="test-body" style="aspect-ratio:16/9"><video id="vid-j3" playsinline muted></video></div>
-        <div class="test-body" style="aspect-ratio:16/9"><video id="vid-j4" playsinline muted></video></div>
-      </div>
-      <div class="btns">
-        <button onclick="multiAll(jVids,'play')">全て再生</button>
-        <button onclick="multiAll(jVids,'pause')">全て一時停止</button>
-      </div>
-    </div>
-
-    <!-- K -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">K: 4 video + Canvas のみ</span>
-        <span class="test-desc">4 つの video (非表示) + Canvas 転写を同時再生・一時停止</span>
-        <span class="test-status" id="status-k"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-k1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-k1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-k2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-k2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-k3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-k3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-k4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-k4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="multiAll(kVids,'play')">全て再生</button>
-        <button onclick="multiAll(kVids,'pause')">全て一時停止</button>
-      </div>
-    </div>
-
-    <!-- L -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">L: 4 video + mp4Faststart + Canvas</span>
-        <span class="test-desc">mp4Faststart + 4 video 非表示 + Canvas (TeslaCamV に最も近い構成)</span>
-        <span class="test-status" id="status-l"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-l1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-l1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-l2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-l2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-l3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-l3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-l4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-l4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="multiAll(lVids,'play')">全て再生</button>
-        <button onclick="multiAll(lVids,'pause')">全て一時停止</button>
-      </div>
-    </div>
-
-    <!-- M -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">M: clearRect→seeked→drawImage (video 非表示)</span>
-        <span class="test-desc">pause 時に canvas を黒クリア → currentTime 再セット → seeked で drawImage</span>
-        <span class="test-status" id="status-m"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-m" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-m"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.m.play()">再生</button>
-        <button onclick="pauseClearReseekCapture(V.m, document.getElementById('cvs-m'), 'status-m')">一時停止 (clear→seeked→capture)</button>
-      </div>
-    </div>
-
-    <!-- N -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">N: 1秒遅延 drawImage (video 非表示)</span>
-        <span class="test-desc">pause 後 1 秒待ってから video→canvas に drawImage (デコーダ解放後)</span>
-        <span class="test-status" id="status-n"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-n" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-n"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.n.play()">再生</button>
-        <button onclick="pauseDelayedCapture(V.n, document.getElementById('cvs-n'), 'status-n', 1000)">一時停止 (1秒後キャプチャ)</button>
-        <button onclick="pauseDelayedCapture(V.n, document.getElementById('cvs-n'), 'status-n', 2000)">一時停止 (2秒後キャプチャ)</button>
-      </div>
-    </div>
-
-    <!-- O -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">O: clearRect→1秒遅延→seeked→drawImage</span>
-        <span class="test-desc">pause 時に canvas 黒クリア → 1 秒待機 → currentTime 再セット → seeked で drawImage</span>
-        <span class="test-status" id="status-o"></span>
-      </div>
-      <div class="test-body">
-        <video id="vid-o" playsinline muted style="visibility:hidden"></video>
-        <canvas id="cvs-o"></canvas>
-      </div>
-      <div class="btns">
-        <button onclick="V.o.play()">再生</button>
-        <button onclick="pauseClearDelayReseekCapture(V.o, document.getElementById('cvs-o'), 'status-o')">一時停止 (clear→1秒→seeked→capture)</button>
-      </div>
-    </div>
-
-    <!-- P -->
-    <div class="test-row">
-      <div class="test-header">
-        <span class="test-label">P: 4 video + clearRect→seeked→drawImage</span>
-        <span class="test-desc">4 video 同時 + pause 時 clear→seeked→drawImage (TeslaCamV フル再現)</span>
-        <span class="test-status" id="status-p"></span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:480px;">
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-p1" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-p1"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-p2" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-p2"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-p3" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-p3"></canvas>
-        </div>
-        <div class="test-body" style="aspect-ratio:16/9">
-          <video id="vid-p4" playsinline muted style="visibility:hidden"></video>
-          <canvas id="cvs-p4"></canvas>
-        </div>
-      </div>
-      <div class="btns">
-        <button onclick="multiAll(pVids,'play')">全て再生</button>
-        <button onclick="pauseClearReseekCaptureMulti(pVids, pCvs, 'status-p')">全て一時停止 (clear→seeked→capture)</button>
-      </div>
-    </div>
   </div>
+
+  <div id="dbg-log"></div>
 
 <script>
 // =====================================================================
-// mp4Faststart + SPS VUI パッチ (msePlayer.ts から移植)
+// mp4Faststart + SPS VUI パッチ
 // =====================================================================
 function parseTopLevelBoxes(buffer) {
-  const view = new DataView(buffer);
-  const boxes = [];
-  let pos = 0;
+  const view = new DataView(buffer); const boxes = []; let pos = 0;
   while (pos + 8 <= buffer.byteLength) {
     const size = view.getUint32(pos);
     const type = String.fromCharCode(view.getUint8(pos+4), view.getUint8(pos+5), view.getUint8(pos+6), view.getUint8(pos+7));
     if (size === 1 || size < 8) break;
     const effectiveSize = size === 0 ? buffer.byteLength - pos : size;
-    boxes.push({ type, offset: pos, size: effectiveSize });
-    pos += effectiveSize;
+    boxes.push({ type, offset: pos, size: effectiveSize }); pos += effectiveSize;
   }
   return boxes;
 }
-
 function updateChunkOffsets(view, start, end, delta) {
-  const CONTAINERS = new Set(['trak','mdia','minf','stbl','udta']);
-  let offset = start;
-  while (offset + 8 <= end) {
-    const boxSize = view.getUint32(offset);
-    const boxType = String.fromCharCode(view.getUint8(offset+4), view.getUint8(offset+5), view.getUint8(offset+6), view.getUint8(offset+7));
-    if (boxSize < 8 || offset + boxSize > end) break;
-    if (boxType === 'stco') {
-      const n = view.getUint32(offset + 12);
-      for (let i = 0; i < n; i++) { const p = offset + 16 + i*4; view.setUint32(p, view.getUint32(p) + delta); }
-    } else if (boxType === 'co64') {
-      const n = view.getUint32(offset + 12);
-      for (let i = 0; i < n; i++) {
-        const p = offset + 16 + i*8; const lo = view.getUint32(p+4); const newLo = (lo + delta) >>> 0;
-        view.setUint32(p, view.getUint32(p) + (lo + delta > 0xFFFFFFFF ? 1 : 0)); view.setUint32(p+4, newLo);
-      }
-    } else if (CONTAINERS.has(boxType)) { updateChunkOffsets(view, offset+8, offset+boxSize, delta); }
-    offset += boxSize;
+  const C = new Set(['trak','mdia','minf','stbl','udta']); let o = start;
+  while (o + 8 <= end) {
+    const s = view.getUint32(o);
+    const t = String.fromCharCode(view.getUint8(o+4),view.getUint8(o+5),view.getUint8(o+6),view.getUint8(o+7));
+    if (s < 8 || o+s > end) break;
+    if (t==='stco') { const n=view.getUint32(o+12); for(let i=0;i<n;i++){const p=o+16+i*4;view.setUint32(p,view.getUint32(p)+delta);} }
+    else if (t==='co64') { const n=view.getUint32(o+12); for(let i=0;i<n;i++){const p=o+16+i*8;const lo=view.getUint32(p+4);const nl=(lo+delta)>>>0;view.setUint32(p,view.getUint32(p)+(lo+delta>0xFFFFFFFF?1:0));view.setUint32(p+4,nl);} }
+    else if (C.has(t)) updateChunkOffsets(view,o+8,o+s,delta);
+    o += s;
   }
 }
-
 function patchSpsRemoveVui(sps) {
-  let bitPos = 8;
-  const totalBits = sps.length * 8;
-  function readBit() { if (bitPos >= totalBits) return 0; const v = (sps[bitPos >> 3] >> (7 - (bitPos & 7))) & 1; bitPos++; return v; }
-  function readBits(n) { let v = 0; for (let i = 0; i < n; i++) v = (v << 1) | readBit(); return v; }
-  function readUE() { let zeros = 0; while (readBit() === 0 && zeros < 32) zeros++; return (1 << zeros) - 1 + readBits(zeros); }
-  function readSE() { const v = readUE(); return (v & 1) ? (v + 1) >> 1 : -(v >> 1); }
-  try {
-    const profile = readBits(8);
-    readBits(8); readBits(8); readUE();
-    const HIGH = [100,110,122,244,44,83,86,118,128,138,139,134];
-    if (HIGH.includes(profile)) {
-      const cf = readUE(); if (cf === 3) readBit();
-      readUE(); readUE(); readBit();
-      if (readBit()) return false;
-    }
-    readUE();
-    const pocType = readUE();
-    if (pocType === 0) { readUE(); }
-    else if (pocType === 1) { readBit(); readSE(); readSE(); const n = readUE(); for (let i = 0; i < n; i++) readSE(); }
-    readUE(); readBit(); readUE(); readUE();
-    if (!readBit()) readBit();
-    readBit();
-    if (readBit()) { readUE(); readUE(); readUE(); readUE(); }
-    const vuiBitPos = bitPos;
-    const vuiPresent = readBit();
-    if (vuiPresent) {
-      const byteIdx = vuiBitPos >> 3;
-      const bitIdx = 7 - (vuiBitPos & 7);
-      sps[byteIdx] &= ~(1 << bitIdx);
-      return true;
-    }
-  } catch {}
-  return false;
+  let bp=8; const tb=sps.length*8;
+  function rb(){if(bp>=tb)return 0;const v=(sps[bp>>3]>>(7-(bp&7)))&1;bp++;return v;}
+  function rbs(n){let v=0;for(let i=0;i<n;i++)v=(v<<1)|rb();return v;}
+  function rue(){let z=0;while(rb()===0&&z<32)z++;return(1<<z)-1+rbs(z);}
+  function rse(){const v=rue();return(v&1)?(v+1)>>1:-(v>>1);}
+  try{const p=rbs(8);rbs(8);rbs(8);rue();
+    if([100,110,122,244,44,83,86,118,128,138,139,134].includes(p)){const cf=rue();if(cf===3)rb();rue();rue();rb();if(rb())return false;}
+    rue();const pt=rue();if(pt===0)rue();else if(pt===1){rb();rse();rse();const n=rue();for(let i=0;i<n;i++)rse();}
+    rue();rb();rue();rue();if(!rb())rb();rb();if(rb()){rue();rue();rue();rue();}
+    const vbp=bp,vp=rb();
+    if(vp){sps[vbp>>3]&=~(1<<(7-(vbp&7)));return true;}
+  }catch{}return false;
 }
-
 function patchMoovSpsVui(buf) {
-  function u32(o) { return (buf[o]<<24)|(buf[o+1]<<16)|(buf[o+2]<<8)|buf[o+3]; }
-  function bt(o) { return String.fromCharCode(buf[o+4],buf[o+5],buf[o+6],buf[o+7]); }
-  function traverse(s, e) {
-    let p = s;
-    while (p+8 <= e) {
-      const sz = u32(p), t = bt(p);
-      if (sz < 8 || p+sz > e) break;
-      if (['trak','mdia','minf','stbl'].includes(t)) traverse(p+8, p+sz);
-      else if (t === 'stsd') traverse(p+16, p+sz);
-      else if (t === 'avc1') traverse(p+86, p+sz);
-      else if (t === 'avcC') patchAvcC(p+8, p+sz);
-      p += sz;
-    }
-  }
-  function patchAvcC(s, e) {
-    if (s+6 > e) return;
-    const n = buf[s+5] & 0x1F;
-    let o = s+6;
-    for (let i = 0; i < n; i++) {
-      if (o+2 > e) return;
-      const len = (buf[o]<<8)|buf[o+1]; o += 2;
-      if (o+len > e) return;
-      patchSpsRemoveVui(buf.subarray(o, o+len));
-      o += len;
-    }
-  }
-  traverse(8, buf.length);
+  function u32(o){return(buf[o]<<24)|(buf[o+1]<<16)|(buf[o+2]<<8)|buf[o+3];}
+  function bt(o){return String.fromCharCode(buf[o+4],buf[o+5],buf[o+6],buf[o+7]);}
+  function traverse(s,e){let p=s;while(p+8<=e){const sz=u32(p),t=bt(p);if(sz<8||p+sz>e)break;
+    if(['trak','mdia','minf','stbl'].includes(t))traverse(p+8,p+sz);
+    else if(t==='stsd')traverse(p+16,p+sz);else if(t==='avc1')traverse(p+86,p+sz);
+    else if(t==='avcC')patchAvcC(p+8,p+sz);p+=sz;}}
+  function patchAvcC(s,e){if(s+6>e)return;const n=buf[s+5]&0x1F;let o=s+6;
+    for(let i=0;i<n;i++){if(o+2>e)return;const l=(buf[o]<<8)|buf[o+1];o+=2;if(o+l>e)return;patchSpsRemoveVui(buf.subarray(o,o+l));o+=l;}}
+  traverse(8,buf.length);
 }
-
 async function mp4Faststart(file) {
   const buffer = await file.arrayBuffer();
   const boxes = parseTopLevelBoxes(buffer);
-  const moovBox = boxes.find(b => b.type === 'moov');
-  const firstMdat = boxes.find(b => b.type === 'mdat');
-  if (!moovBox || !firstMdat || moovBox.offset < firstMdat.offset) return new Blob([buffer], { type: 'video/mp4' });
-  const moovBuffer = buffer.slice(moovBox.offset, moovBox.offset + moovBox.size);
-  patchMoovSpsVui(new Uint8Array(moovBuffer));
-  updateChunkOffsets(new DataView(moovBuffer), 8, moovBox.size, moovBox.size);
+  const moov = boxes.find(b=>b.type==='moov'), mdat = boxes.find(b=>b.type==='mdat');
+  if (!moov||!mdat||moov.offset<mdat.offset) return new Blob([buffer],{type:'video/mp4'});
+  const mb = buffer.slice(moov.offset, moov.offset+moov.size);
+  patchMoovSpsVui(new Uint8Array(mb));
+  updateChunkOffsets(new DataView(mb),8,moov.size,moov.size);
   const parts = [];
-  const ftypBox = boxes.find(b => b.type === 'ftyp');
-  if (ftypBox) parts.push(buffer.slice(ftypBox.offset, ftypBox.offset + ftypBox.size));
-  parts.push(moovBuffer);
-  for (const box of boxes) { if (box.type !== 'ftyp' && box.type !== 'moov') parts.push(buffer.slice(box.offset, box.offset + box.size)); }
-  return new Blob(parts, { type: 'video/mp4' });
+  const ftyp = boxes.find(b=>b.type==='ftyp');
+  if(ftyp) parts.push(buffer.slice(ftyp.offset,ftyp.offset+ftyp.size));
+  parts.push(mb);
+  for(const b of boxes){if(b.type!=='ftyp'&&b.type!=='moov')parts.push(buffer.slice(b.offset,b.offset+b.size));}
+  return new Blob(parts,{type:'video/mp4'});
 }
 
 // =====================================================================
-// rVFC ループ (video → canvas に毎フレーム転写)
+// ユーティリティ
 // =====================================================================
-function startCanvasLoop(video, canvas) {
-  const ctx = canvas.getContext('2d');
-  function draw() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(draw);
-    } else {
-      requestAnimationFrame(draw);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(draw);
-  } else {
-    requestAnimationFrame(draw);
-  }
-}
-
-// =====================================================================
-// ヘルパー
-// =====================================================================
-function pauseAndReseek(video, statusId) {
-  video.pause();
-  const t = video.currentTime;
-  video.currentTime = t;
-  document.getElementById(statusId).textContent = '一時停止 + 再シーク (t=' + t.toFixed(2) + ')';
-}
-
-function pauseReseekCapture(video, canvas, statusId) {
-  video.pause();
-  const t = video.currentTime;
-  video.currentTime = t;
-  const s = document.getElementById(statusId);
-  s.textContent = '一時停止 + 再シーク中... (t=' + t.toFixed(2) + ')';
-  video.addEventListener('seeked', function onSeeked() {
-    video.removeEventListener('seeked', onSeeked);
-    const ctx = canvas.getContext('2d');
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    s.textContent = '一時停止 + seeked 後キャプチャ完了 (t=' + t.toFixed(2) + ')';
-  });
-}
-
-function multiAll(vids, action) { vids.forEach(v => v[action]()); }
-
-// デバッグログ
 const dbgLog = document.getElementById('dbg-log');
 function dlog(msg) {
   dbgLog.style.display = 'block';
   const now = new Date().toLocaleTimeString('ja-JP', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits:3});
   dbgLog.textContent = now + ' ' + msg + '\n' + dbgLog.textContent;
 }
-
-// rVFC 停止可能版
-const rvfcHandles = new Map();
-function startRvfc(video, canvas) {
-  stopRvfc(video);
-  const ctx = canvas.getContext('2d');
-  function draw() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    if ('requestVideoFrameCallback' in video) {
-      rvfcHandles.set(video, video.requestVideoFrameCallback(draw));
-    } else {
-      rvfcHandles.set(video, requestAnimationFrame(draw));
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    rvfcHandles.set(video, video.requestVideoFrameCallback(draw));
-  } else {
-    rvfcHandles.set(video, requestAnimationFrame(draw));
-  }
+async function copyDlog() {
+  const txt = dbgLog.textContent;
+  try { await navigator.clipboard.writeText(txt); alert('ログコピー (' + txt.split('\n').length + '行)'); }
+  catch(e) { alert('コピー失敗: ' + e.message); }
 }
-function stopRvfc(video) {
-  const h = rvfcHandles.get(video);
-  if (h != null) {
-    if ('requestVideoFrameCallback' in video) video.cancelVideoFrameCallback(h);
-    else cancelAnimationFrame(h);
-    rvfcHandles.delete(video);
-  }
-}
-
-// --- FF: シーク + 短い play() 間隔 ---
-const ffVids = [1,2,3,4].map(i => document.getElementById('vid-ff'+i));
-const ffCvs  = [1,2,3,4].map(i => document.getElementById('cvs-ff'+i));
-const ffPaused = [false,false,false,false];
-const ffT0 = [0,0,0,0];
-let ffLoaded = false;
-
-async function ffEnsureLoaded() {
-  if (ffLoaded) return;
-  if (!ccFiles.every(f => f)) throw new Error('CC のフォルダ選択が必要');
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(ccFiles[i]);
-    ffVids[i].src = URL.createObjectURL(blob);
-  }
-  await Promise.all(ffVids.map(v => new Promise(r => {
-    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
-  })));
-  ffLoaded = true;
-}
-
-function ffStartRvfc(video, canvas, idx) {
-  const ctx = canvas.getContext('2d');
-  let prevState = '';
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      if (ffPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - ffT0[idx]).toFixed(0);
-        const state = 'rs=' + video.readyState + ',b=' + b;
-        if (state !== prevState) {
-          dlog('FF[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevState = state;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
-    else requestAnimationFrame(loop);
-  }
-  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
-  else requestAnimationFrame(loop);
-}
-
-async function ffPlayAndSeekTest(intervalMs, mode) {
-  try { await ffEnsureLoaded(); } catch(e) { alert(e.message); return; }
-  ffPaused.fill(false);
-  // currentTime をリセット (再生位置を 0 に)
-  ffVids.forEach(v => v.currentTime = 0);
-  await new Promise(r => setTimeout(r, 100));
-  dlog('FF: ' + intervalMs + 'ms 間隔 play() テスト ===');
-  for (let i = 0; i < 4; i++) {
-    ffVids[i].play().then(() => dlog('FF[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('FF[' + ccCamNames[i] + ']: play() error: '+e.message));
-    ffStartRvfc(ffVids[i], ffCvs[i], i);
-    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
-  }
-  await new Promise(r => setTimeout(r, 5000));
-  ffVids.forEach((v, i) => {
-    dlog('FF[' + ccCamNames[i] + ']: 5秒後 ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + (v.currentTime < 0.1 ? ' ★再生失敗!' : ''));
-  });
-  document.getElementById('status-ff').textContent = '再生中。シークボタンを押してください';
-}
-
-async function ffSeekWhilePlaying(deltaSec, intervalMs) {
-  dlog('FF: 再生中シーク ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒 (間隔=' + intervalMs + 'ms) ===');
-  for (let i = 0; i < 4; i++) {
-    const v = ffVids[i];
-    ffT0[i] = performance.now();
-    const newTime = Math.max(0, v.currentTime + deltaSec);
-    dlog('FF[' + ccCamNames[i] + ']: シーク前 ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
-    v.currentTime = newTime;
-    ffPaused[i] = true;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - ffT0[i]).toFixed(0);
-      dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-      setTimeout(() => { ffPaused[i] = false; }, 5000);
-    });
-    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
-  }
-}
-
-async function ffPauseAndSeek(deltaSec, intervalMs) {
-  dlog('FF: 一時停止して ' + (deltaSec > 0 ? '+' : '') + deltaSec + '秒シーク (間隔=' + intervalMs + 'ms) ===');
-  // 全部 pause を先に
-  ffVids.forEach(v => v.pause());
-  // 順次 currentTime をセット
-  for (let i = 0; i < 4; i++) {
-    const v = ffVids[i];
-    ffT0[i] = performance.now();
-    const newTime = Math.max(0, v.currentTime + deltaSec);
-    dlog('FF[' + ccCamNames[i] + ']: pause+シーク ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(ffCvs[i]) + ' → 新位置=' + newTime.toFixed(3));
-    v.currentTime = newTime;
-    ffPaused[i] = true;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - ffT0[i]).toFixed(0);
-      dlog('FF[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-    });
-    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
-  }
-}
-
-// --- EE: play() を時間差で呼ぶ ---
-const eeVids = [1,2,3,4].map(i => document.getElementById('vid-ee'+i));
-const eeCvs  = [1,2,3,4].map(i => document.getElementById('cvs-ee'+i));
-
-function startRvfcEE(video, canvas) {
-  const ctx = canvas.getContext('2d');
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
-    else requestAnimationFrame(loop);
-  }
-  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
-  else requestAnimationFrame(loop);
-}
-
-async function eeAutoTest(intervalMs) {
-  if (!ccFiles.every(f => f)) { alert('まず CC の TeslaCam フォルダ選択を行ってください'); return; }
-  dlog('EE: ' + intervalMs + 'ms 間隔で play() テスト開始');
-  // 4 カメラファイルを EE 用にロード
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(ccFiles[i]);
-    eeVids[i].src = URL.createObjectURL(blob);
-  }
-  await Promise.all(eeVids.map(v => new Promise(r => {
-    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
-  })));
-  document.getElementById('status-ee').textContent = '4 video ロード完了、' + intervalMs + 'ms 間隔で play()';
-  // 順次 play()
-  for (let i = 0; i < 4; i++) {
-    const t0 = performance.now();
-    eeVids[i].play().then(() => {
-      const elapsed = (performance.now() - t0).toFixed(0);
-      dlog('EE[' + ccCamNames[i] + ']: play() resolved (' + elapsed + 'ms)');
-    }).catch(e => dlog('EE[' + ccCamNames[i] + ']: play() error: '+e.message));
-    startRvfcEE(eeVids[i], eeCvs[i]);
-    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
-  }
-  // 5 秒後に各 video の currentTime を確認
-  await new Promise(r => setTimeout(r, 5000));
-  eeVids.forEach((v, i) => {
-    dlog('EE[' + ccCamNames[i] + ']: 5秒後 ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + (v.currentTime < 0.1 ? ' ★再生失敗!' : ''));
-  });
-  document.getElementById('status-ee').textContent = 'テスト完了 (ログ参照)';
-}
-
-// --- DD: pause のみ (currentTime 再セットしない) ---
-const ddVids = [1,2,3,4].map(i => document.getElementById('vid-dd'+i));
-const ddCvs  = [1,2,3,4].map(i => document.getElementById('cvs-dd'+i));
-const ddPaused = [false,false,false,false];
-const ddT0 = [0,0,0,0];
-
-function startRvfcWithReadyStateDD(video, canvas, idx) {
-  const ctx = canvas.getContext('2d');
-  let prevState = '';
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      if (ddPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - ddT0[idx]).toFixed(0);
-        const state = 'rs=' + video.readyState + ',b=' + b;
-        if (state !== prevState) {
-          dlog('DD[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevState = state;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(loop);
-    } else {
-      requestAnimationFrame(loop);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(loop);
-  } else {
-    requestAnimationFrame(loop);
-  }
-}
-
-async function ddAutoTest(seconds) {
-  if (!ccFiles.every(f => f)) { alert('まず CC の TeslaCam フォルダ選択を行ってください'); return; }
-  // CC のファイルを DD 用に再ロード
-  dlog('DD: 4 カメラファイル DD 用にロード中...');
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(ccFiles[i]);
-    ddVids[i].src = URL.createObjectURL(blob);
-  }
-  // loadeddata 待ち
-  await Promise.all(ddVids.map(v => new Promise(r => {
-    v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
-  })));
-  ddPaused.fill(false);
-  ddVids.forEach((v, i) => {
-    v.play().then(() => dlog('DD[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('DD[' + ccCamNames[i] + ']: play() error: '+e.message));
-    startRvfcWithReadyStateDD(v, ddCvs[i], i);
-  });
-  document.getElementById('status-dd').textContent = seconds + '秒再生中...';
-  for (let s = seconds; s > 0; s -= 5) {
-    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
-    document.getElementById('status-dd').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
-  }
-  // pause だけ。currentTime には触らない
-  dlog('DD: ' + seconds + '秒経過、pause のみ実行 (currentTime 触らない) ===');
-  ddVids.forEach((v, i) => {
-    ddT0[i] = performance.now();
-    v.pause();
-    dlog('DD[' + ccCamNames[i] + ']: pause ct=' + v.currentTime.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(ddCvs[i]));
-    ddPaused[i] = true;
-  });
-  document.getElementById('status-dd').textContent = '一時停止 (currentTime 触らない)';
-}
-
-// --- CC: ディレクトリ選択 + 4 カメラ別ファイル ---
-const ccVids = [1,2,3,4].map(i => document.getElementById('vid-cc'+i));
-const ccCvs  = [1,2,3,4].map(i => document.getElementById('cvs-cc'+i));
-const ccPaused = [false,false,false,false];
-const ccT0 = [0,0,0,0];
-const ccCamNames = ['front','back','left_repeater','right_repeater'];
-const ccFiles = [null,null,null,null];
-
-async function ccPickDirectory() {
-  const info = document.getElementById('cc-files-info');
-  if (!('showDirectoryPicker' in window)) {
-    alert('このブラウザは File System Access API に未対応です');
-    return;
-  }
-  let dirHandle;
-  try {
-    dirHandle = await window.showDirectoryPicker();
-  } catch (e) {
-    if (e.name !== 'AbortError') alert('フォルダ選択エラー: ' + e.message);
-    return;
-  }
-  // ディレクトリ内のファイルを列挙
-  const allFiles = [];
-  for await (const [name, handle] of dirHandle.entries()) {
-    if (handle.kind === 'file' && name.endsWith('.mp4')) {
-      allFiles.push({ name, handle });
-    }
-  }
-  // 各カメラの最初のファイルを取得
-  for (let i = 0; i < 4; i++) {
-    const cam = ccCamNames[i];
-    const found = allFiles.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
-    if (found[0]) {
-      ccFiles[i] = await found[0].handle.getFile();
-    } else {
-      ccFiles[i] = null;
-    }
-  }
-  info.innerHTML = ccFiles.map((f, i) => ccCamNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
-  if (ccFiles.every(f => f)) {
-    dlog('CC: 4 カメラファイル ロード中...');
-    for (let i = 0; i < 4; i++) {
-      const blob = await mp4Faststart(ccFiles[i]);
-      ccVids[i].src = URL.createObjectURL(blob);
-    }
-    dlog('CC: 4 カメラファイル ロード完了');
-    info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備完了</span>';
-  }
-}
-
-function startRvfcWithReadyStateCC(video, canvas, idx) {
-  const ctx = canvas.getContext('2d');
-  let prevState = '';
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      if (ccPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - ccT0[idx]).toFixed(0);
-        const state = 'rs=' + video.readyState + ',b=' + b;
-        if (state !== prevState) {
-          dlog('CC[' + ccCamNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevState = state;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(loop);
-    } else {
-      requestAnimationFrame(loop);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(loop);
-  } else {
-    requestAnimationFrame(loop);
-  }
-}
-
-function ccPlay() {
-  if (!ccFiles.every(f => f)) { alert('まず TeslaCam フォルダを選択してください'); return; }
-  ccPaused.fill(false);
-  ccVids.forEach((v, i) => {
-    v.play().then(() => dlog('CC[' + ccCamNames[i] + ']: play() resolved')).catch(e => dlog('CC[' + ccCamNames[i] + ']: play() error: '+e.message));
-    startRvfcWithReadyStateCC(v, ccCvs[i], i);
-  });
-  document.getElementById('status-cc').textContent = '4 カメラ再生中';
-  dlog('CC: 4 カメラ再生開始');
-}
-
-function ccPauseAndSeek() {
-  dlog('CC: pause + seekTo (4 カメラ別ファイル) 開始 ===');
-  ccVids.forEach((v, i) => {
-    ccT0[i] = performance.now();
-    const ct = v.currentTime;
-    v.pause();
-    dlog('CC[' + ccCamNames[i] + ']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(ccCvs[i]));
-    v.currentTime = ct;
-    ccPaused[i] = true;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - ccT0[i]).toFixed(0);
-      dlog('CC[' + ccCamNames[i] + ']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-    });
-  });
-}
-
-async function ccAutoTest(seconds) {
-  if (!ccFiles.every(f => f)) { alert('まず TeslaCam フォルダを選択してください'); return; }
-  dlog('CC: 自動テスト ' + seconds + '秒再生→pause 開始');
-  ccPlay();
-  for (let s = seconds; s > 0; s -= 5) {
-    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
-    document.getElementById('status-cc').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
-  }
-  dlog('CC: ' + seconds + '秒経過、pause 実行');
-  ccPauseAndSeek();
-}
-
-// --- BB: 8 video (4 表示 + 4 idle) ---
-const bbVids = [1,2,3,4].map(i => document.getElementById('vid-bb'+i));
-const bbCvs  = [1,2,3,4].map(i => document.getElementById('cvs-bb'+i));
-const bbIdleVids = [];  // 4 個の idle video (DOM に追加しない)
-const bbPaused = [false,false,false,false];
-const bbT0 = [0,0,0,0];
-
-function startRvfcWithReadyStateBB(video, canvas, idx) {
-  const ctx = canvas.getContext('2d');
-  let prevState = '';
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      if (bbPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - bbT0[idx]).toFixed(0);
-        const state = 'rs=' + video.readyState + ',b=' + b;
-        if (state !== prevState) {
-          dlog('BB[cam' + (idx+1) + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevState = state;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(loop);
-    } else {
-      requestAnimationFrame(loop);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(loop);
-  } else {
-    requestAnimationFrame(loop);
-  }
-}
-
-async function bbPlay() {
-  bbPaused.fill(false);
-  // idle video 4 個を作成 (DOM に追加しない、本体の _captureVideo 相当)
-  if (bbIdleVids.length === 0) {
-    dlog('BB: idle video 4 個を作成中...');
-    for (let i = 0; i < 4; i++) {
-      const v = document.createElement('video');
-      v.muted = true;
-      v.preload = 'auto';
-      v.playsInline = true;
-      const blob = await mp4Faststart(currentFile);
-      v.src = URL.createObjectURL(blob);
-      bbIdleVids.push(v);
-    }
-    dlog('BB: idle video 4 個作成完了');
-  }
-  bbVids.forEach((v, i) => {
-    v.play().then(() => dlog('BB[cam'+(i+1)+']: play() resolved')).catch(e => dlog('BB[cam'+(i+1)+']: play() error: '+e.message));
-    startRvfcWithReadyStateBB(v, bbCvs[i], i);
-  });
-  document.getElementById('status-bb').textContent = '4 video 再生中 (idle 4 個も背後に)';
-  dlog('BB: 4 video 再生開始 (idle video 合計 8 個)');
-}
-
-function bbPauseAndSeek() {
-  dlog('BB: pause + seekTo (8 video) 開始 ===');
-  bbVids.forEach((v, i) => {
-    bbT0[i] = performance.now();
-    const ct = v.currentTime;
-    v.pause();
-    dlog('BB[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(bbCvs[i]));
-    v.currentTime = ct;
-    bbPaused[i] = true;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - bbT0[i]).toFixed(0);
-      dlog('BB[cam'+(i+1)+']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-    });
-  });
-}
-
-async function bbAutoTest(seconds) {
-  dlog('BB: 自動テスト ' + seconds + '秒再生→pause 開始');
-  await bbPlay();
-  bbVids.forEach(v => v.currentTime = 0);
-  for (let s = seconds; s > 0; s -= 5) {
-    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
-    document.getElementById('status-bb').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
-  }
-  dlog('BB: ' + seconds + '秒経過、pause 実行');
-  bbPauseAndSeek();
-}
-
-// --- AA: 5 video + readyState ログ (本体と同じデコーダ枯渇を再現) ---
-const aaVids = [1,2,3,4,5].map(i => document.getElementById('vid-aa'+i));
-const aaCvs  = [1,2,3,4,5].map(i => document.getElementById('cvs-aa'+i));
-const aaPaused = [false,false,false,false,false];
-const aaT0 = [0,0,0,0,0];
-
-function startRvfcWithReadyState(video, canvas, idx, label) {
-  const ctx = canvas.getContext('2d');
-  let prevState = '';
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      if (aaPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - aaT0[idx]).toFixed(0);
-        const state = 'rs=' + video.readyState + ',b=' + b;
-        if (state !== prevState) {
-          dlog(label + '[cam' + (idx+1) + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevState = state;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(loop);
-    } else {
-      requestAnimationFrame(loop);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(loop);
-  } else {
-    requestAnimationFrame(loop);
-  }
-}
-
-function aaPlay() {
-  aaPaused.fill(false);
-  aaVids.forEach((v, i) => {
-    v.play().then(() => dlog('AA[cam'+(i+1)+']: play() resolved')).catch(e => dlog('AA[cam'+(i+1)+']: play() error: '+e.message));
-    startRvfcWithReadyState(v, aaCvs[i], i, 'AA');
-  });
-  document.getElementById('status-aa').textContent = '5 video 再生中';
-  dlog('AA: 5 video 再生開始');
-}
-
-async function aaAutoTest(seconds) {
-  dlog('AA: 自動テスト ' + seconds + '秒再生→pause 開始');
-  aaPaused.fill(false);
-  aaVids.forEach((v, i) => {
-    v.currentTime = 0;
-    v.play().catch(e => dlog('AA[cam'+(i+1)+']: play() error: '+e.message));
-    startRvfcWithReadyState(v, aaCvs[i], i, 'AA');
-  });
-  document.getElementById('status-aa').textContent = seconds + '秒再生中...';
-  // 指定秒数待つ (実時間で)
-  for (let s = seconds; s > 0; s -= 5) {
-    await new Promise(r => setTimeout(r, Math.min(5000, s * 1000)));
-    document.getElementById('status-aa').textContent = '残り ' + Math.max(0, s - 5) + '秒...';
-  }
-  dlog('AA: ' + seconds + '秒経過、pause 実行');
-  document.getElementById('status-aa').textContent = '一時停止 + seekTo 実行';
-  aaPauseAndSeek();
-}
-
-function aaPauseAndSeek() {
-  dlog('AA: pause + seekTo (5 video) 開始 ===');
-  aaVids.forEach((v, i) => {
-    aaT0[i] = performance.now();
-    const ct = v.currentTime;
-    v.pause();
-    dlog('AA[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + measureBrightness(aaCvs[i]));
-    v.currentTime = ct;
-    aaPaused[i] = true;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - aaT0[i]).toFixed(0);
-      dlog('AA[cam'+(i+1)+']: seeked ' + elapsed + 'ms rs=' + v.readyState);
-    });
-  });
-}
-
-// --- Z: rVFC を止めずに pause + seekTo (本体再現) ---
-const zVids = [1,2,3,4].map(i => document.getElementById('vid-z'+i));
-const zCvs  = [1,2,3,4].map(i => document.getElementById('cvs-z'+i));
-const zPaused = [false,false,false,false];  // 各 video が一時停止後フェーズか
-const zT0 = [0,0,0,0];
-
-// 本体と同じ rVFC ループ (常に回り続け、captureFrame と同等の処理を行う)
-function startRvfcWithLog(video, canvas, idx) {
-  const ctx = canvas.getContext('2d');
-  let prevB = -1;
-  function loop() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      // 一時停止フェーズの時のみログを出す
-      if (zPaused[idx]) {
-        const b = measureBrightness(canvas);
-        const elapsed = (performance.now() - zT0[idx]).toFixed(0);
-        if (b !== prevB) {
-          dlog('Z[cam' + (idx+1) + ']: rVFC 発火 (' + elapsed + 'ms 経過) drawImage→ brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
-          prevB = b;
-        }
-      }
-    }
-    if ('requestVideoFrameCallback' in video) {
-      video.requestVideoFrameCallback(loop);
-    } else {
-      requestAnimationFrame(loop);
-    }
-  }
-  if ('requestVideoFrameCallback' in video) {
-    video.requestVideoFrameCallback(loop);
-  } else {
-    requestAnimationFrame(loop);
-  }
-}
-
-function zPlay() {
-  zPaused.fill(false);
-  zVids.forEach((v, i) => {
-    v.play().then(() => dlog('Z[cam'+(i+1)+']: play() resolved')).catch(e => dlog('Z[cam'+(i+1)+']: play() error: '+e.message));
-    startRvfcWithLog(v, zCvs[i], i);
-  });
-  document.getElementById('status-z').textContent = '4 video 再生中 (rVFC ループ実行中)';
-  dlog('Z: 4 video 再生開始 (rVFC ループ継続)');
-}
-
-function zPauseAndSeek() {
-  dlog('Z: pause + seekTo (rVFC継続) 開始 ===');
-  zVids.forEach((v, i) => {
-    zT0[i] = performance.now();
-    const ct = v.currentTime;
-    v.pause();
-    // rVFC は止めない
-    dlog('Z[cam'+(i+1)+']: pause ct=' + ct.toFixed(3) + ' brightness=' + measureBrightness(zCvs[i]));
-    v.currentTime = ct;
-    zPaused[i] = true;  // ここから rVFC 発火を記録
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - zT0[i]).toFixed(0);
-      dlog('Z[cam'+(i+1)+']: seeked イベント (' + elapsed + 'ms 経過)');
-    });
-  });
-}
-
-// --- Y: seeked 遅延 + 輝度測定 (本体ログの再現) ---
-const yVids = [1,2,3,4].map(i => document.getElementById('vid-y'+i));
-const yCvs  = [1,2,3,4].map(i => document.getElementById('cvs-y'+i));
 
 function measureBrightness(canvas) {
   const ctx = canvas.getContext('2d');
@@ -1700,576 +188,209 @@ function measureBrightness(canvas) {
   return Math.round(total / (d.length / 4));
 }
 
-function yPlay() {
-  // 初期ロードで src は既にセット済み。play() だけ呼ぶ (autoplay policy 回避)
-  const s = document.getElementById('status-y');
-  yVids.forEach((v, i) => {
-    v.play().then(() => dlog('Y[cam'+(i+1)+']: play() resolved')).catch(e => dlog('Y[cam'+(i+1)+']: play() error: '+e.message));
-    startRvfc(v, yCvs[i]);
-  });
-  s.textContent = '4 video 再生中';
-  dlog('Y: 4 video 再生開始');
-}
+// =====================================================================
+// フォルダ選択 + ファイル管理
+// =====================================================================
+const camNames = ['front','back','left_repeater','right_repeater'];
+const files = [null,null,null,null];
 
-function yPauseAndSeek() {
-  dlog('Y: pause + seekTo + 輝度測定 開始 ===');
-  yVids.forEach((v, i) => {
-    const camName = 'cam' + (i+1);
-    v.pause();
-    stopRvfc(v);
-    const t0 = performance.now();
-    const ct = v.currentTime;
-    const beforeB = measureBrightness(yCvs[i]);
-    dlog('Y[' + camName + ']: pause 直後 brightness=' + beforeB + ' ct=' + ct.toFixed(3));
-    v.currentTime = ct;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      const elapsed = (performance.now() - t0).toFixed(0);
-      const ctx = yCvs[i].getContext('2d');
-      if (v.videoWidth > 0) {
-        if (yCvs[i].width !== v.videoWidth || yCvs[i].height !== v.videoHeight) {
-          yCvs[i].width = v.videoWidth; yCvs[i].height = v.videoHeight;
-        }
-        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
-      }
-      const afterB = measureBrightness(yCvs[i]);
-      dlog('Y[' + camName + ']: seeked 後 (' + elapsed + 'ms 経過) drawImage→ brightness=' + afterB + (afterB <= 5 ? ' ★暗転!' : ''));
-    });
-  });
-}
-
-// --- V: src を複数回差し替え (セグメント切替再現) ---
-async function swapSrc(video, canvas, statusId) {
-  const oldUrl = video.src;
-  const blob = await mp4Faststart(currentFile);
-  const url = URL.createObjectURL(blob);
-  video.src = url;
-  if (oldUrl) URL.revokeObjectURL(oldUrl);
-  return new Promise(r => {
-    video.addEventListener('loadeddata', function once() {
-      video.removeEventListener('loadeddata', once);
-      r();
-    });
-  });
-}
-
-async function vMultiSwap(count) {
-  const s = document.getElementById('status-v');
-  const vid = V.v, cvs = document.getElementById('cvs-v');
-  stopRvfc(vid);
-  vid.pause();
-  for (let i = 0; i < count; i++) {
-    s.textContent = 'src 差し替え ' + (i+1) + '/' + count + '...';
-    await swapSrc(vid, cvs);
-    // 少し再生してから次の差し替え (セグメント切替を模擬)
-    if (i < count - 1) {
-      vid.play();
-      await new Promise(r => setTimeout(r, 500));
-      vid.pause();
-    }
+async function pickDirectory() {
+  const info = document.getElementById('files-info');
+  if (!('showDirectoryPicker' in window)) { alert('このブラウザは File System Access API に未対応'); return; }
+  let dirHandle;
+  try { dirHandle = await window.showDirectoryPicker(); }
+  catch (e) { if (e.name !== 'AbortError') alert('エラー: ' + e.message); return; }
+  const allFiles = [];
+  for await (const [name, h] of dirHandle.entries()) {
+    if (h.kind === 'file' && name.endsWith('.mp4')) allFiles.push({ name, h });
   }
-  vid.play();
-  startRvfc(vid, cvs);
-  s.textContent = count + ' 回差し替え完了、再生中';
-  dlog('V: ' + count + ' 回 src 差し替え完了、再生中');
-}
-
-function vPauseFull() {
-  const vid = V.v, cvs = document.getElementById('cvs-v');
-  vid.pause();
-  stopRvfc(vid);
-  const ctx = cvs.getContext('2d');
-  if (cvs.width > 0) ctx.clearRect(0, 0, cvs.width, cvs.height);
-  vid.style.visibility = 'hidden';
-  const t = vid.currentTime;
-  vid.currentTime = t;
-  dlog('V: pause + rVFC停止 + clearRect + hidden');
-  vid.addEventListener('seeked', function once() {
-    vid.removeEventListener('seeked', once);
-    vid.style.visibility = 'visible';
-    if (vid.videoWidth > 0) {
-      if (cvs.width !== vid.videoWidth || cvs.height !== vid.videoHeight) {
-        cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
-      }
-      ctx.drawImage(vid, 0, 0, vid.videoWidth, vid.videoHeight);
-    }
-    dlog('V: seeked → visible + drawImage');
-  });
-}
-
-// --- W: 自動テスト (差し替え→再生→5秒→pause→2秒→輝度測定) ---
-async function wAutoTest() {
-  const s = document.getElementById('status-w');
-  const vid = V.w, cvs = document.getElementById('cvs-w');
-  stopRvfc(vid);
-  vid.pause();
-
-  // 3 回 src 差し替え
-  for (let i = 0; i < 3; i++) {
-    s.textContent = 'src 差し替え ' + (i+1) + '/3...';
-    await swapSrc(vid, cvs);
-    if (i < 2) { vid.play(); await new Promise(r => setTimeout(r, 500)); vid.pause(); }
-  }
-
-  // 再生開始
-  vid.play();
-  startRvfc(vid, cvs);
-  s.textContent = '再生中... (5 秒後に自動一時停止)';
-  dlog('W: 再生開始、5秒後に自動pause');
-
-  await new Promise(r => setTimeout(r, 5000));
-
-  // 一時停止 (full)
-  vid.pause();
-  stopRvfc(vid);
-  const ctx = cvs.getContext('2d');
-  if (cvs.width > 0) ctx.clearRect(0, 0, cvs.width, cvs.height);
-  vid.style.visibility = 'hidden';
-  const t = vid.currentTime;
-  vid.currentTime = t;
-  s.textContent = '一時停止。seeked 待ち...';
-  dlog('W: pause + clear + hidden');
-
-  await new Promise(r => {
-    vid.addEventListener('seeked', function once() {
-      vid.removeEventListener('seeked', once);
-      vid.style.visibility = 'visible';
-      if (vid.videoWidth > 0) {
-        if (cvs.width !== vid.videoWidth || cvs.height !== vid.videoHeight) {
-          cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
-        }
-        ctx.drawImage(vid, 0, 0, vid.videoWidth, vid.videoHeight);
-      }
-      dlog('W: seeked → visible + drawImage');
-      r();
-    });
-  });
-
-  // 2 秒待って輝度測定
-  s.textContent = 'seeked 後キャプチャ完了。2 秒後に輝度測定...';
-  await new Promise(r => setTimeout(r, 2000));
-
-  // もう一度 drawImage して輝度計測
-  if (vid.videoWidth > 0) {
-    ctx.drawImage(vid, 0, 0, vid.videoWidth, vid.videoHeight);
-  }
-  const imgData = ctx.getImageData(0, 0, cvs.width, cvs.height);
-  let totalBrightness = 0;
-  for (let i = 0; i < imgData.data.length; i += 4) {
-    totalBrightness += imgData.data[i] * 0.299 + imgData.data[i+1] * 0.587 + imgData.data[i+2] * 0.114;
-  }
-  const avgBrightness = (totalBrightness / (imgData.data.length / 4)).toFixed(1);
-  s.textContent = '輝度: ' + avgBrightness + ' (暗転なら低い値になるはず)';
-  dlog('W: 2秒後の平均輝度 = ' + avgBrightness);
-}
-
-// --- X: 4 video + src 複数回差し替え ---
-const xVids = [1,2,3,4].map(i => document.getElementById('vid-x'+i));
-const xCvs  = [1,2,3,4].map(i => document.getElementById('cvs-x'+i));
-
-async function xMultiSwap() {
-  const s = document.getElementById('status-x');
-  // 全 video を停止
-  xVids.forEach((v,i) => { stopRvfc(v); v.pause(); });
-
-  // 各 video で 3 回 src 差し替え
-  for (let round = 0; round < 3; round++) {
-    s.textContent = 'src 差し替え ' + (round+1) + '/3...';
-    await Promise.all(xVids.map((v,i) => swapSrc(v, xCvs[i])));
-    if (round < 2) {
-      xVids.forEach(v => v.play());
-      await new Promise(r => setTimeout(r, 500));
-      xVids.forEach(v => v.pause());
-    }
-  }
-
-  xVids.forEach((v,i) => { v.play(); startRvfc(v, xCvs[i]); });
-  s.textContent = '3 回差し替え完了、4 video 再生中';
-  dlog('X: 4 video x3 回差し替え完了、再生中');
-}
-
-function xPauseFull() {
-  dlog('X: 全 pause 開始');
-  xVids.forEach((v,i) => {
-    v.pause();
-    stopRvfc(v);
-    const ctx = xCvs[i].getContext('2d');
-    if (xCvs[i].width > 0) ctx.clearRect(0, 0, xCvs[i].width, xCvs[i].height);
-    v.style.visibility = 'hidden';
-    const t = v.currentTime;
-    v.currentTime = t;
-    v.addEventListener('seeked', function once() {
-      v.removeEventListener('seeked', once);
-      v.style.visibility = 'visible';
-      if (v.videoWidth > 0) {
-        if (xCvs[i].width !== v.videoWidth || xCvs[i].height !== v.videoHeight) {
-          xCvs[i].width = v.videoWidth; xCvs[i].height = v.videoHeight;
-        }
-        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
-      }
-      dlog('X['+i+']: seeked → visible + drawImage');
-    });
-  });
-}
-
-// --- Q: src 差し替え後に pause ---
-async function qSwapAndPlay() {
-  dlog('Q: src 差し替え');
-  const blob = await mp4Faststart(currentFile);
-  V.q.src = URL.createObjectURL(blob);
-  V.q.addEventListener('loadeddata', function once() {
-    V.q.removeEventListener('loadeddata', once);
-    V.q.play();
-    startRvfc(V.q, document.getElementById('cvs-q'));
-    dlog('Q: 再生開始');
-  });
-}
-
-// --- R: rVFC 停止型 ---
-function rPlay() {
-  V.r.play();
-  startRvfc(V.r, document.getElementById('cvs-r'));
-  dlog('R: 再生 (rVFC 開始)');
-}
-function rPause() {
-  V.r.pause();
-  stopRvfc(V.r);
-  dlog('R: pause + rVFC 停止');
-  const t = V.r.currentTime;
-  V.r.currentTime = t;
-  V.r.addEventListener('seeked', function once() {
-    V.r.removeEventListener('seeked', once);
-    const cvs = document.getElementById('cvs-r');
-    const ctx = cvs.getContext('2d');
-    if (V.r.videoWidth > 0) ctx.drawImage(V.r, 0, 0, V.r.videoWidth, V.r.videoHeight);
-    dlog('R: seeked 後キャプチャ');
-  });
-}
-
-// --- S: フル再現 ---
-async function sSwapAndPlay() {
-  dlog('S: src 差し替え');
-  const blob = await mp4Faststart(currentFile);
-  V.s.src = URL.createObjectURL(blob);
-  V.s.addEventListener('loadeddata', function once() {
-    V.s.removeEventListener('loadeddata', once);
-    V.s.play();
-    startRvfc(V.s, document.getElementById('cvs-s'));
-    dlog('S: 再生開始');
-  });
-}
-function sPause() {
-  V.s.pause();
-  stopRvfc(V.s);
-  const cvs = document.getElementById('cvs-s');
-  const ctx = cvs.getContext('2d');
-  if (cvs.width > 0) ctx.clearRect(0, 0, cvs.width, cvs.height);
-  V.s.style.visibility = 'hidden';
-  dlog('S: pause + rVFC停止 + clearRect + visibility=hidden');
-  const t = V.s.currentTime;
-  V.s.currentTime = t;
-  V.s.addEventListener('seeked', function once() {
-    V.s.removeEventListener('seeked', once);
-    V.s.style.visibility = 'visible';
-    if (V.s.videoWidth > 0) {
-      if (cvs.width !== V.s.videoWidth || cvs.height !== V.s.videoHeight) {
-        cvs.width = V.s.videoWidth; cvs.height = V.s.videoHeight;
-      }
-      ctx.drawImage(V.s, 0, 0, V.s.videoWidth, V.s.videoHeight);
-    }
-    dlog('S: seeked → visible + drawImage');
-  });
-}
-
-// --- T: 全部入り x4 ---
-const tVids = [1,2,3,4].map(i => document.getElementById('vid-t'+i));
-const tCvs  = [1,2,3,4].map(i => document.getElementById('cvs-t'+i));
-async function tSwapAndPlay() {
-  dlog('T: 4 video src 差し替え');
   for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(currentFile);
-    tVids[i].src = URL.createObjectURL(blob);
+    const cam = camNames[i];
+    const found = allFiles.filter(f => f.name.includes('-' + cam + '.mp4')).sort((a,b) => a.name.localeCompare(b.name));
+    files[i] = found[0] ? await found[0].h.getFile() : null;
   }
-  await Promise.all(tVids.map(v => new Promise(r => {
+  info.innerHTML = files.map((f, i) => camNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
+  if (files.every(f => f)) {
+    info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備中…</span>';
+    // A, B 用に video にロード
+    await loadVideos(aVids);
+    await loadVideos(bVids);
+    info.innerHTML = info.innerHTML.replace('準備中…', '準備完了');
+    document.getElementById('tests').style.display = 'block';
+    dlog('ファイル準備完了');
+  }
+}
+
+async function loadVideos(vids) {
+  for (let i = 0; i < 4; i++) {
+    const blob = await mp4Faststart(files[i]);
+    vids[i].src = URL.createObjectURL(blob);
+  }
+  await Promise.all(vids.map(v => new Promise(r => {
     v.addEventListener('loadeddata', function once() { v.removeEventListener('loadeddata', once); r(); });
   })));
-  tVids.forEach((v, i) => { v.play(); startRvfc(v, tCvs[i]); });
-  dlog('T: 全再生開始');
 }
-function tPause() {
-  dlog('T: 全 pause 開始');
-  tVids.forEach((v, i) => {
+
+// =====================================================================
+// rVFC ループ (paused 中もログを取る)
+// =====================================================================
+function startRvfc(video, canvas, idx, label, paused, t0) {
+  const ctx = canvas.getContext('2d');
+  let prevState = '';
+  function loop() {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      if (paused[idx]) {
+        const b = measureBrightness(canvas);
+        const elapsed = (performance.now() - t0[idx]).toFixed(0);
+        const state = 'rs=' + video.readyState + ',b=' + b;
+        if (state !== prevState) {
+          dlog(label + '[' + camNames[idx] + ']: rVFC ' + elapsed + 'ms paused=' + video.paused + ' rs=' + video.readyState + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+          prevState = state;
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+}
+
+// =====================================================================
+// A: pause+シーク (内部 play で復帰)
+// =====================================================================
+const aVids = [1,2,3,4].map(i => document.getElementById('vid-a'+i));
+const aCvs  = [1,2,3,4].map(i => document.getElementById('cvs-a'+i));
+const aPaused = [false,false,false,false];
+const aT0 = [0,0,0,0];
+let aRvfcStarted = false;
+
+function ensureARvfc() {
+  if (aRvfcStarted) return;
+  aVids.forEach((v, i) => startRvfc(v, aCvs[i], i, 'A', aPaused, aT0));
+  aRvfcStarted = true;
+}
+
+async function aPlay(intervalMs) {
+  aPaused.fill(false);
+  aVids.forEach(v => v.currentTime = 0);
+  await new Promise(r => setTimeout(r, 100));
+  ensureARvfc();
+  dlog('A: ' + intervalMs + 'ms間隔 play()');
+  for (let i = 0; i < 4; i++) {
+    aVids[i].play().catch(e => dlog('A[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  document.getElementById('status-a').textContent = '再生中';
+}
+
+function aPause() {
+  dlog('A: pause のみ (currentTime 触らない)');
+  aVids.forEach((v, i) => {
+    aT0[i] = performance.now();
     v.pause();
-    stopRvfc(v);
-    const ctx = tCvs[i].getContext('2d');
-    if (tCvs[i].width > 0) ctx.clearRect(0, 0, tCvs[i].width, tCvs[i].height);
-    v.style.visibility = 'hidden';
-    const t = v.currentTime;
-    v.currentTime = t;
+    aPaused[i] = true;
+    dlog('A[' + camNames[i] + ']: pause ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(aCvs[i]));
+  });
+  document.getElementById('status-a').textContent = '一時停止';
+}
+
+// 素のまま (TeslaCamV と同じ動作 = 暗転確認用)
+function aPauseAndSeekDirect(deltaSec) {
+  dlog('A: 素の pause+シーク (' + (deltaSec>0?'+':'') + deltaSec + '秒)');
+  aVids.forEach((v, i) => {
+    aT0[i] = performance.now();
+    v.pause();
+    const newTime = Math.max(0, v.currentTime + deltaSec);
+    dlog('A[' + camNames[i] + ']: pause+シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3));
+    v.currentTime = newTime;
+    aPaused[i] = true;
     v.addEventListener('seeked', function once() {
       v.removeEventListener('seeked', once);
-      v.style.visibility = 'visible';
-      if (v.videoWidth > 0) {
-        if (tCvs[i].width !== v.videoWidth || tCvs[i].height !== v.videoHeight) {
-          tCvs[i].width = v.videoWidth; tCvs[i].height = v.videoHeight;
-        }
-        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
-      }
-      dlog('T['+i+']: seeked → visible + drawImage');
+      dlog('A[' + camNames[i] + ']: seeked ' + (performance.now()-aT0[i]).toFixed(0) + 'ms');
     });
   });
 }
 
-// M: pause → canvas を clearRect (黒) → currentTime 再セット → seeked で drawImage
-// TeslaCamV の clearCapturedFrame → seekTo → seeked → captureFrame の流れを再現
-function pauseClearReseekCapture(video, canvas, statusId) {
-  video.pause();
-  const ctx = canvas.getContext('2d');
-  // canvas を黒クリア (TeslaCamV の clearCapturedFrame 相当)
-  if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const t = video.currentTime;
-  video.currentTime = t;
-  const s = document.getElementById(statusId);
-  s.textContent = 'clear済み、seeked 待ち... (t=' + t.toFixed(2) + ')';
-  video.addEventListener('seeked', function onSeeked() {
-    video.removeEventListener('seeked', onSeeked);
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    s.textContent = 'clear→seeked→capture 完了 (t=' + t.toFixed(2) + ')';
+// 内部 play で復帰
+async function aPauseAndSeekRecover(deltaSec) {
+  dlog('A: pause+シーク (内部 play で復帰、' + (deltaSec>0?'+':'') + deltaSec + '秒)');
+  // 1. 再生中なら一時停止
+  // 2. currentTime をセット (この時点で video は再生中→新位置を取得開始)
+  // 3. play() で再生開始 (paused なら)、currentTime セット直後に
+  // 4. 1 秒待つ (再生中シークと同じく自動復帰)
+  // 5. pause()
+  aVids.forEach((v, i) => {
+    aT0[i] = performance.now();
+    aPaused[i] = false;  // 復帰中はログを抑制
+    const newTime = Math.max(0, v.currentTime + deltaSec);
+    dlog('A[' + camNames[i] + ']: シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3) + ' (再生開始)');
+    if (v.paused) v.play().catch(e => dlog('A[' + camNames[i] + ']: play() error: '+e.message));
+    v.currentTime = newTime;
   });
+  // 1 秒待ってから pause
+  await new Promise(r => setTimeout(r, 1100));
+  dlog('A: 1.1 秒経過、pause()');
+  aVids.forEach((v, i) => {
+    v.pause();
+    aPaused[i] = true;
+    aT0[i] = performance.now();
+    dlog('A[' + camNames[i] + ']: pause 後 ct=' + v.currentTime.toFixed(3) + ' brightness=' + measureBrightness(aCvs[i]));
+  });
+  document.getElementById('status-a').textContent = '内部 play 復帰後 pause';
 }
 
-// N: pause → 指定ミリ秒待ってから drawImage (デコーダのフレームバッファ解放後を狙う)
-function pauseDelayedCapture(video, canvas, statusId, delayMs) {
-  video.pause();
-  const s = document.getElementById(statusId);
-  s.textContent = '一時停止、' + delayMs + 'ms 待機中...';
-  setTimeout(() => {
-    const ctx = canvas.getContext('2d');
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-    }
-    s.textContent = delayMs + 'ms 後キャプチャ完了 (t=' + video.currentTime.toFixed(2) + ')';
-  }, delayMs);
+// =====================================================================
+// B: 再生中シーク
+// =====================================================================
+const bVids = [1,2,3,4].map(i => document.getElementById('vid-b'+i));
+const bCvs  = [1,2,3,4].map(i => document.getElementById('cvs-b'+i));
+const bPaused = [false,false,false,false];
+const bT0 = [0,0,0,0];
+let bRvfcStarted = false;
+
+function ensureBRvfc() {
+  if (bRvfcStarted) return;
+  bVids.forEach((v, i) => startRvfc(v, bCvs[i], i, 'B', bPaused, bT0));
+  bRvfcStarted = true;
 }
 
-// O: pause → canvas クリア → 1秒待機 → currentTime 再セット → seeked で drawImage
-function pauseClearDelayReseekCapture(video, canvas, statusId) {
-  video.pause();
-  const ctx = canvas.getContext('2d');
-  if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const s = document.getElementById(statusId);
-  s.textContent = 'clear済み、1秒待機中...';
-  setTimeout(() => {
-    const t = video.currentTime;
-    video.currentTime = t;
-    s.textContent = '1秒後 seeked 待ち... (t=' + t.toFixed(2) + ')';
-    video.addEventListener('seeked', function onSeeked() {
-      video.removeEventListener('seeked', onSeeked);
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-        }
-        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      }
-      s.textContent = 'clear→1秒→seeked→capture 完了 (t=' + t.toFixed(2) + ')';
+async function bPlay() {
+  bPaused.fill(false);
+  bVids.forEach(v => v.currentTime = 0);
+  await new Promise(r => setTimeout(r, 100));
+  ensureBRvfc();
+  dlog('B: 100ms間隔 play()');
+  for (let i = 0; i < 4; i++) {
+    bVids[i].play().catch(e => dlog('B[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3) await new Promise(r => setTimeout(r, 100));
+  }
+  document.getElementById('status-b').textContent = '再生中';
+}
+
+async function bSeek(deltaSec, intervalMs) {
+  dlog('B: 再生中シーク (' + (deltaSec>0?'+':'') + deltaSec + '秒、間隔=' + intervalMs + 'ms)');
+  for (let i = 0; i < 4; i++) {
+    const v = bVids[i];
+    bT0[i] = performance.now();
+    const newTime = Math.max(0, v.currentTime + deltaSec);
+    dlog('B[' + camNames[i] + ']: シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3));
+    v.currentTime = newTime;
+    bPaused[i] = true;
+    v.addEventListener('seeked', function once() {
+      v.removeEventListener('seeked', once);
+      dlog('B[' + camNames[i] + ']: seeked ' + (performance.now()-bT0[i]).toFixed(0) + 'ms');
+      setTimeout(() => { bPaused[i] = false; }, 5000);
     });
-  }, 1000);
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
 }
 
-// P: 4 video 同時版の clear→seeked→drawImage
-function pauseClearReseekCaptureMulti(vids, canvases, statusId) {
-  vids.forEach((v, i) => pauseClearReseekCapture(v, canvases[i], i === 0 ? statusId : null));
-}
-// statusId が null の場合にも対応するよう修正
-const origPauseClearReseekCapture = pauseClearReseekCapture;
-pauseClearReseekCapture = function(video, canvas, statusId) {
-  if (!statusId) {
-    // statusId なしの場合は status 表示をスキップ
-    video.pause();
-    const ctx = canvas.getContext('2d');
-    if (canvas.width > 0) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const t = video.currentTime;
-    video.currentTime = t;
-    video.addEventListener('seeked', function onSeeked() {
-      video.removeEventListener('seeked', onSeeked);
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        }
-        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      }
-    });
-    return;
-  }
-  origPauseClearReseekCapture(video, canvas, statusId);
-};
-
-// =====================================================================
-// 要素取得
-// =====================================================================
-const V = {};
-let currentFile = null;
-['a','b','c','d','e','f','g','h','i','m','n','o','q','r','s','v','w'].forEach(id => { V[id] = document.getElementById('vid-' + id); });
-
-const jVids = [1,2,3,4].map(i => document.getElementById('vid-j'+i));
-const kVids = [1,2,3,4].map(i => document.getElementById('vid-k'+i));
-const lVids = [1,2,3,4].map(i => document.getElementById('vid-l'+i));
-const pVids = [1,2,3,4].map(i => document.getElementById('vid-p'+i));
-const pCvs  = [1,2,3,4].map(i => document.getElementById('cvs-p'+i));
-
-// ステータス表示
-['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','v','w','x','y','z','aa','bb','cc','dd','ee','ff'].forEach(id => {
-  const v = document.getElementById('vid-' + id) || document.getElementById('vid-' + id + '1');
-  const s = document.getElementById('status-' + id);
-  if (v && s) {
-    v.addEventListener('play', () => s.textContent = '再生中');
-    v.addEventListener('pause', () => s.textContent = '一時停止');
-    v.addEventListener('ended', () => s.textContent = '再生完了');
-  }
-});
-
-// =====================================================================
-// ファイル読み込み
-// =====================================================================
-document.getElementById('file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  currentFile = file;
-  document.getElementById('file-select').style.display = 'none';
-  document.getElementById('tests').style.display = 'block';
-
-  // A: 素の video
-  V.a.src = URL.createObjectURL(file);
-
-  // B: mp4Faststart
-  document.getElementById('status-b').textContent = '処理中...';
-  const blobB = await mp4Faststart(file);
-  V.b.src = URL.createObjectURL(blobB);
-  document.getElementById('status-b').textContent = '準備完了';
-
-  // C: Canvas 転写 (video 可視)
-  V.c.src = URL.createObjectURL(file);
-  startCanvasLoop(V.c, document.getElementById('cvs-c'));
-
-  // D: Canvas のみ (video 非表示)
-  V.d.src = URL.createObjectURL(file);
-  startCanvasLoop(V.d, document.getElementById('cvs-d'));
-
-  // E: mp4Faststart + Canvas のみ
-  document.getElementById('status-e').textContent = '処理中...';
-  const blobE = await mp4Faststart(file);
-  V.e.src = URL.createObjectURL(blobE);
-  startCanvasLoop(V.e, document.getElementById('cvs-e'));
-  document.getElementById('status-e').textContent = '準備完了';
-
-  // F: pause + currentTime 再セット
-  V.f.src = URL.createObjectURL(file);
-
-  // G: pause + seeked 後 drawImage (素)
-  V.g.src = URL.createObjectURL(file);
-
-  // H: pause + seeked 後 drawImage (video 非表示)
-  V.h.src = URL.createObjectURL(file);
-  startCanvasLoop(V.h, document.getElementById('cvs-h'));
-
-  // I: mp4Faststart + pause + seeked 後 drawImage (video 非表示)
-  document.getElementById('status-i').textContent = '処理中...';
-  const blobI = await mp4Faststart(file);
-  V.i.src = URL.createObjectURL(blobI);
-  startCanvasLoop(V.i, document.getElementById('cvs-i'));
-  document.getElementById('status-i').textContent = '準備完了';
-
-  // J: 4 video 同時 (素)
-  jVids.forEach(v => { v.src = URL.createObjectURL(file); });
-
-  // K: 4 video + Canvas (video 非表示)
-  kVids.forEach((v, i) => {
-    v.src = URL.createObjectURL(file);
-    startCanvasLoop(v, document.getElementById('cvs-k' + (i+1)));
-  });
-
-  // L: 4 video + mp4Faststart + Canvas
-  document.getElementById('status-l').textContent = '処理中...';
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(file);
-    lVids[i].src = URL.createObjectURL(blob);
-    startCanvasLoop(lVids[i], document.getElementById('cvs-l' + (i+1)));
-  }
-  document.getElementById('status-l').textContent = '準備完了';
-
-  // M: clearRect → seeked → drawImage (video 非表示)
-  V.m.src = URL.createObjectURL(file);
-  startCanvasLoop(V.m, document.getElementById('cvs-m'));
-
-  // N: 遅延 drawImage (video 非表示)
-  V.n.src = URL.createObjectURL(file);
-  startCanvasLoop(V.n, document.getElementById('cvs-n'));
-
-  // O: clearRect → 1秒遅延 → seeked → drawImage (video 非表示)
-  V.o.src = URL.createObjectURL(file);
-  startCanvasLoop(V.o, document.getElementById('cvs-o'));
-
-  // P: 4 video + clearRect → seeked → drawImage
-  pVids.forEach((v, i) => {
-    v.src = URL.createObjectURL(file);
-    startCanvasLoop(v, pCvs[i]);
-  });
-
-  // Y, Z: 4 video 初期ロード (yPlay/zPlay で即 play() できるように)
-  for (let i = 0; i < 4; i++) {
-    const blobY = await mp4Faststart(file);
-    yVids[i].src = URL.createObjectURL(blobY);
-    const blobZ = await mp4Faststart(file);
-    zVids[i].src = URL.createObjectURL(blobZ);
-  }
-  // AA: 5 video 初期ロード (本体と同じ video 数で再現)
-  for (let i = 0; i < 5; i++) {
-    const blob = await mp4Faststart(file);
-    aaVids[i].src = URL.createObjectURL(blob);
-  }
-  // BB: 4 表示 video 初期ロード (idle 4 個は bbPlay で作る)
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(file);
-    bbVids[i].src = URL.createObjectURL(blob);
-  }
-
-  // V, W: 初期ロード (差し替えテスト用)
-  for (const id of ['v','w']) {
-    const blob = await mp4Faststart(file);
-    V[id].src = URL.createObjectURL(blob);
-    startRvfc(V[id], document.getElementById('cvs-' + id));
-  }
-  // X: 4 video 初期ロード
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(file);
-    xVids[i].src = URL.createObjectURL(blob);
-    startRvfc(xVids[i], xCvs[i]);
-  }
-
-  // Q〜T: mp4Faststart で初期ロード
-  for (const id of ['q','r','s']) {
-    const blob = await mp4Faststart(file);
-    V[id].src = URL.createObjectURL(blob);
-    startRvfc(V[id], document.getElementById('cvs-' + id));
-  }
-  for (let i = 0; i < 4; i++) {
-    const blob = await mp4Faststart(file);
-    tVids[i].src = URL.createObjectURL(blob);
-    startRvfc(tVids[i], tCvs[i]);
-  }
-  dlog('Q〜T 初期ロード完了');
-});
+document.getElementById('build-time').textContent = '(build: 2026-04-13 11:35)';
 </script>
 </body>
 </html>
