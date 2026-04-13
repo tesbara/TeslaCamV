@@ -318,22 +318,27 @@ function aPauseAndSeekDirect(deltaSec) {
 // 内部 play で復帰
 async function aPauseAndSeekRecover(deltaSec) {
   dlog('A: pause+シーク (内部 play で復帰、' + (deltaSec>0?'+':'') + deltaSec + '秒)');
-  // 1. 再生中なら一時停止
-  // 2. currentTime をセット (この時点で video は再生中→新位置を取得開始)
-  // 3. play() で再生開始 (paused なら)、currentTime セット直後に
-  // 4. 1 秒待つ (再生中シークと同じく自動復帰)
-  // 5. pause()
-  aVids.forEach((v, i) => {
-    aT0[i] = performance.now();
-    aPaused[i] = false;  // 復帰中はログを抑制
+  aPaused.fill(false);  // 復帰中はログを抑制
+  // 1. play() を呼んで resolved を待つ (順次)
+  for (let i = 0; i < 4; i++) {
+    if (aVids[i].paused) {
+      try { await aVids[i].play(); dlog('A[' + camNames[i] + ']: play() resolved'); }
+      catch (e) { dlog('A[' + camNames[i] + ']: play() error: ' + e.message); }
+    }
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  // 2. currentTime をセット (順次)
+  for (let i = 0; i < 4; i++) {
+    const v = aVids[i];
     const newTime = Math.max(0, v.currentTime + deltaSec);
-    dlog('A[' + camNames[i] + ']: シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3) + ' (再生開始)');
-    if (v.paused) v.play().catch(e => dlog('A[' + camNames[i] + ']: play() error: '+e.message));
+    dlog('A[' + camNames[i] + ']: シーク ct=' + v.currentTime.toFixed(3) + ' → ' + newTime.toFixed(3));
     v.currentTime = newTime;
-  });
-  // 1 秒待ってから pause
-  await new Promise(r => setTimeout(r, 1100));
-  dlog('A: 1.1 秒経過、pause()');
+    if (i < 3) await new Promise(r => setTimeout(r, 50));
+  }
+  // 3. 1.5 秒待機 (再生中シークの復帰時間)
+  await new Promise(r => setTimeout(r, 1500));
+  dlog('A: 1.5 秒経過、pause()');
+  // 4. pause
   aVids.forEach((v, i) => {
     v.pause();
     aPaused[i] = true;
@@ -389,7 +394,7 @@ async function bSeek(deltaSec, intervalMs) {
   }
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 11:42)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 11:55)';
 </script>
 </body>
 </html>
