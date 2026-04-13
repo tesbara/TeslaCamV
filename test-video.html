@@ -42,7 +42,7 @@
     <div id="files-info" style="margin-top:6px;font-size:11px;color:#aaa"></div>
   </div>
 
-  <div id="tests" style="display:none">
+  <div id="tests">
 
     <!-- A: pause+シーク (内部 play で復帰) -->
     <div class="test-row" style="border-color:#0f0">
@@ -216,7 +216,6 @@ async function pickDirectory() {
     await loadVideos(aVids);
     await loadVideos(bVids);
     info.innerHTML = info.innerHTML.replace('準備中…', '準備完了');
-    document.getElementById('tests').style.display = 'block';
     dlog('ファイル準備完了');
   }
 }
@@ -390,7 +389,7 @@ async function bSeek(deltaSec, intervalMs) {
   }
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 11:35)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 11:42)';
 </script>
 </body>
 </html>
