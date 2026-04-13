@@ -100,6 +100,33 @@
       </div>
     </div>
 
+    <!-- C: 再生開始時の seekTo 影響 -->
+    <div class="test-row" style="border-color:#f0f">
+      <div class="test-header">
+        <span class="test-label" style="color:#f0f">C: 再生開始時の seekTo 影響</span>
+        <span class="test-desc">再生開始時に currentTime セット有無で暗転が変わるか。500ms 後に自動 pause して暗転固定するか確認</span>
+        <span class="test-status" id="status-c"></span>
+      </div>
+      <div class="quad">
+        <div class="test-body"><video id="vid-c1" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c1"></canvas><div class="cam-label">front</div></div>
+        <div class="test-body"><video id="vid-c2" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c2"></canvas><div class="cam-label">back</div></div>
+        <div class="test-body"><video id="vid-c3" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c3"></canvas><div class="cam-label">left_repeater</div></div>
+        <div class="test-body"><video id="vid-c4" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c4"></canvas><div class="cam-label">right_repeater</div></div>
+      </div>
+      <div class="btns">
+        <button onclick="cPlayOnly(50)">play のみ 50ms間隔</button>
+        <button onclick="cPlayWithSeek(50)">seekTo+play 50ms間隔</button>
+        <button onclick="cPauseNow()">手動 pause (現時点の brightness 記録)</button>
+      </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ 自動テスト (再生開始→XXms後に自動pause)</span>
+        <button onclick="cAutoTest('playOnly', 500)">play のみ→500ms後pause</button>
+        <button onclick="cAutoTest('playOnly', 1000)">play のみ→1秒後pause</button>
+        <button onclick="cAutoTest('playWithSeek', 500)">seekTo+play→500ms後pause</button>
+        <button onclick="cAutoTest('playWithSeek', 1000)">seekTo+play→1秒後pause</button>
+      </div>
+    </div>
+
   </div>
 
   <div id="dbg-log"></div>
@@ -228,9 +255,10 @@ async function pickDirectory() {
   info.innerHTML = files.map((f, i) => camNames[i] + ': ' + (f ? f.name : '<span style="color:#f88">なし</span>')).join('<br>');
   if (files.every(f => f)) {
     info.innerHTML += '<br><span style="color:#0f0">4 ファイル準備中…</span>';
-    // A, B 用に video にロード
+    // A, B, C 用に video にロード
     await loadVideos(aVids);
     await loadVideos(bVids);
+    await loadVideos(cVids);
     info.innerHTML = info.innerHTML.replace('準備中…', '準備完了');
     dlog('ファイル準備完了');
   }
@@ -420,7 +448,132 @@ async function bSeek(deltaSec, intervalMs) {
   }
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 12:50)';
+// =====================================================================
+// C: 再生開始時の seekTo 影響
+// =====================================================================
+const cVids = [1,2,3,4].map(i => document.getElementById('vid-c'+i));
+const cCvs  = [1,2,3,4].map(i => document.getElementById('cvs-c'+i));
+const cPaused = [false,false,false,false];
+const cT0 = [0,0,0,0];
+let cRvfcStarted = false;
+// 各カメラの play() 呼び出し時刻と、最初の ct 進行を計測するための記録
+const cPlayStartTime = [0,0,0,0];
+const cFirstCtMeasured = [false,false,false,false];
+
+function ensureCRvfc() {
+  if (cRvfcStarted) return;
+  // rVFC で brightness と ct 進行をログに記録
+  cVids.forEach((v, i) => {
+    const ctx = cCvs[i].getContext('2d');
+    let prevState = '';
+    function loop() {
+      if (v.videoWidth > 0 && v.videoHeight > 0) {
+        if (cCvs[i].width !== v.videoWidth || cCvs[i].height !== v.videoHeight) {
+          cCvs[i].width = v.videoWidth; cCvs[i].height = v.videoHeight;
+        }
+        ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight);
+        if (cPaused[i]) {
+          const b = measureBrightness(cCvs[i]);
+          const ct = v.currentTime.toFixed(3);
+          const elapsed = (performance.now() - cT0[i]).toFixed(0);
+          const state = 'rs=' + v.readyState + ',b=' + b + ',ct=' + ct;
+          if (state !== prevState) {
+            dlog('C[' + camNames[i] + ']: rVFC ' + elapsed + 'ms paused=' + v.paused + ' rs=' + v.readyState + ' ct=' + ct + ' brightness=' + b + (b <= 5 ? ' ★暗転!' : ''));
+            prevState = state;
+          }
+        }
+      }
+      if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(loop);
+      else requestAnimationFrame(loop);
+    }
+    if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  });
+  cRvfcStarted = true;
+}
+
+// play のみで再生開始 (currentTime は触らない)
+async function cPlayOnly(intervalMs) {
+  dlog('C: play のみ (' + intervalMs + 'ms 間隔) - currentTime 触らず');
+  // 前の再生状態をリセット
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  // 各カメラの ct を 0 に戻してから開始 (初期状態を揃える)
+  for (let i = 0; i < 4; i++) cVids[i].currentTime = 0;
+  // seeked を待つ
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  })));
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  // 再生開始 (50ms 順次)
+  for (let i = 0; i < 4; i++) {
+    cPlayStartTime[i] = performance.now();
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  document.getElementById('status-c').textContent = 'play のみで再生中';
+}
+
+// seekTo + play で再生開始 (currentTime を現在値+0.5秒にセット)
+async function cPlayWithSeek(intervalMs) {
+  dlog('C: seekTo+play (' + intervalMs + 'ms 間隔) - currentTime セットあり');
+  cPaused.fill(false);
+  cVids.forEach(v => v.pause());
+  // 各カメラの ct を 0 に戻す
+  for (let i = 0; i < 4; i++) cVids[i].currentTime = 0;
+  await Promise.all(cVids.map(v => new Promise(r => {
+    v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+    setTimeout(r, 2000);
+  })));
+  await new Promise(r => setTimeout(r, 200));
+  ensureCRvfc();
+  // 再生開始: 各カメラで currentTime = 0.5 にセットしてから play (本体の syncAllCameras の seekTo+play を模擬)
+  for (let i = 0; i < 4; i++) {
+    cPlayStartTime[i] = performance.now();
+    cVids[i].currentTime = 0.5;  // 位置セット (ずれを作る)
+    cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+    if (i < 3 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+  }
+  document.getElementById('status-c').textContent = 'seekTo+play で再生中';
+}
+
+// 手動 pause (現時点の ct と brightness を記録)
+function cPauseNow() {
+  dlog('C: 手動 pause - 現時点の状態記録');
+  cVids.forEach((v, i) => {
+    cT0[i] = performance.now();
+    v.pause();
+    cPaused[i] = true;
+    const b = measureBrightness(cCvs[i]);
+    const ct = v.currentTime;
+    dlog('C[' + camNames[i] + ']: pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + b + (ct < 0.05 ? ' ★再生失敗!' : '') + (b <= 5 && ct >= 0.05 ? ' ★真の暗転!' : ''));
+  });
+  document.getElementById('status-c').textContent = '一時停止';
+}
+
+// 自動テスト: 再生開始→XXms 後に自動 pause
+async function cAutoTest(mode, pauseDelayMs) {
+  dlog('=== C: 自動テスト ' + mode + ' (' + pauseDelayMs + 'ms 後 pause) ===');
+  if (mode === 'playOnly') await cPlayOnly(50);
+  else await cPlayWithSeek(50);
+  // 指定時間後に pause
+  await new Promise(r => setTimeout(r, pauseDelayMs));
+  cPauseNow();
+  // 2 秒間 rVFC でブロック変化を見る
+  await new Promise(r => setTimeout(r, 2000));
+  // 結果サマリ
+  const results = cVids.map((v, i) => {
+    const ct = v.currentTime;
+    const b = measureBrightness(cCvs[i]);
+    return camNames[i] + '(ct=' + ct.toFixed(2) + ',b=' + b + ')';
+  }).join(' ');
+  dlog('C: 結果 ' + results);
+  document.getElementById('status-c').textContent = '完了: ' + results;
+}
+
+document.getElementById('build-time').textContent = '(build: 2026-04-13 11:51)';
 </script>
 </body>
 </html>
