@@ -44,6 +44,42 @@
 
   <div id="tests">
 
+    <!-- C: 再生開始時の seekTo 影響 (最新) -->
+    <div class="test-row" style="border-color:#f0f">
+      <div class="test-header">
+        <span class="test-label" style="color:#f0f">C: 再生開始時の暗転調査</span>
+        <span class="test-desc">再生開始時の暗転 (再生開始 0 ~ 700ms 頃 brightness=0) の再現条件を探る</span>
+        <span class="test-status" id="status-c"></span>
+      </div>
+      <div class="quad">
+        <div class="test-body"><video id="vid-c1" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c1"></canvas><div class="cam-label">front</div></div>
+        <div class="test-body"><video id="vid-c2" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c2"></canvas><div class="cam-label">back</div></div>
+        <div class="test-body"><video id="vid-c3" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c3"></canvas><div class="cam-label">left_repeater</div></div>
+        <div class="test-body"><video id="vid-c4" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c4"></canvas><div class="cam-label">right_repeater</div></div>
+      </div>
+      <div class="btns">
+        <button onclick="cPlayOnly(50)">play のみ 50ms間隔</button>
+        <button onclick="cPlayWithSeek(50)">seekTo+play 50ms間隔</button>
+        <button onclick="cPauseNow()">手動 pause (現時点の brightness 記録)</button>
+      </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ 単発 自動テスト (再生開始→XXms後に自動pause)</span>
+        <button onclick="cAutoTest('playOnly', 500)">play のみ→500ms後pause</button>
+        <button onclick="cAutoTest('playOnly', 1000)">play のみ→1秒後pause</button>
+        <button onclick="cAutoTest('playWithSeek', 500)">seekTo+play→500ms後pause</button>
+        <button onclick="cAutoTest('playWithSeek', 1000)">seekTo+play→1秒後pause</button>
+      </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ 連続 5 回 (同じ操作を繰り返し。回ごとの違いを見る)</span>
+        <button onclick="cRepeatTest('playOnly', 500, 5)">play のみ x5</button>
+        <button onclick="cRepeatTest('playWithSeek', 500, 5)">seekTo+play x5</button>
+      </div>
+      <div class="btns" style="margin-top:4px">
+        <span style="font-size:11px;color:#888;align-self:center">▼ 位置変動 (開始位置を変えて暗転する位置があるか見る)</span>
+        <button onclick="cPositionTest([0, 5, 10, 20, 40])">位置=[0,5,10,20,40]秒</button>
+      </div>
+    </div>
+
     <!-- A: pause+シーク (内部 play で復帰) -->
     <div class="test-row" style="border-color:#0f0">
       <div class="test-header">
@@ -97,33 +133,6 @@
         <button onclick="bSeek(5, 0)">+5秒シーク 同時</button>
         <button onclick="bSeek(5, 100)">+5秒シーク 100ms間隔</button>
         <button onclick="bSeek(-3, 100)">-3秒シーク 100ms間隔</button>
-      </div>
-    </div>
-
-    <!-- C: 再生開始時の seekTo 影響 -->
-    <div class="test-row" style="border-color:#f0f">
-      <div class="test-header">
-        <span class="test-label" style="color:#f0f">C: 再生開始時の seekTo 影響</span>
-        <span class="test-desc">再生開始時に currentTime セット有無で暗転が変わるか。500ms 後に自動 pause して暗転固定するか確認</span>
-        <span class="test-status" id="status-c"></span>
-      </div>
-      <div class="quad">
-        <div class="test-body"><video id="vid-c1" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c1"></canvas><div class="cam-label">front</div></div>
-        <div class="test-body"><video id="vid-c2" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c2"></canvas><div class="cam-label">back</div></div>
-        <div class="test-body"><video id="vid-c3" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c3"></canvas><div class="cam-label">left_repeater</div></div>
-        <div class="test-body"><video id="vid-c4" playsinline muted style="visibility:hidden"></video><canvas id="cvs-c4"></canvas><div class="cam-label">right_repeater</div></div>
-      </div>
-      <div class="btns">
-        <button onclick="cPlayOnly(50)">play のみ 50ms間隔</button>
-        <button onclick="cPlayWithSeek(50)">seekTo+play 50ms間隔</button>
-        <button onclick="cPauseNow()">手動 pause (現時点の brightness 記録)</button>
-      </div>
-      <div class="btns" style="margin-top:4px">
-        <span style="font-size:11px;color:#888;align-self:center">▼ 自動テスト (再生開始→XXms後に自動pause)</span>
-        <button onclick="cAutoTest('playOnly', 500)">play のみ→500ms後pause</button>
-        <button onclick="cAutoTest('playOnly', 1000)">play のみ→1秒後pause</button>
-        <button onclick="cAutoTest('playWithSeek', 500)">seekTo+play→500ms後pause</button>
-        <button onclick="cAutoTest('playWithSeek', 1000)">seekTo+play→1秒後pause</button>
       </div>
     </div>
 
@@ -572,7 +581,88 @@ async function cAutoTest(mode, pauseDelayMs) {
   document.getElementById('status-c').textContent = '完了: ' + results;
 }
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 12:00)';
+// 連続 N 回テスト: 同じ操作を繰り返して毎回の brightness を記録
+async function cRepeatTest(mode, pauseDelayMs, count) {
+  dlog('======= C: 連続 ' + count + ' 回 ' + mode + ' (' + pauseDelayMs + 'ms 後 pause) 開始 =======');
+  for (let round = 1; round <= count; round++) {
+    dlog('--- C: ' + round + '/' + count + ' 回目 ---');
+    // 各回の前に currentTime を 0 にリセットして、初期状態を揃える
+    cPaused.fill(false);
+    cVids.forEach(v => v.pause());
+    for (let i = 0; i < 4; i++) cVids[i].currentTime = 0;
+    await Promise.all(cVids.map(v => new Promise(r => {
+      v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+      setTimeout(r, 1500);
+    })));
+    await new Promise(r => setTimeout(r, 200));
+    ensureCRvfc();
+    // 再生開始
+    for (let i = 0; i < 4; i++) {
+      cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+      if (i < 3) await new Promise(r => setTimeout(r, 50));
+      if (mode === 'playWithSeek' && i === 0) {
+        // 最初の 1 台だけ seekTo 付き (負荷を減らすため)。基本は play のみで比較
+      }
+    }
+    // 指定時間待って pause
+    await new Promise(r => setTimeout(r, pauseDelayMs));
+    cVids.forEach((v, i) => {
+      cT0[i] = performance.now();
+      v.pause();
+      cPaused[i] = true;
+      const b = measureBrightness(cCvs[i]);
+      const ct = v.currentTime;
+      dlog('C[' + camNames[i] + '] 回' + round + ': pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + b + (ct < 0.05 ? ' ★再生失敗!' : '') + (b <= 5 && ct >= 0.05 ? ' ★真の暗転!' : ''));
+    });
+    // 結果サマリ
+    const results = cVids.map((v, i) => camNames[i] + '(ct=' + v.currentTime.toFixed(2) + ',b=' + measureBrightness(cCvs[i]) + ')').join(' ');
+    dlog('C: 回' + round + ' 結果 ' + results);
+    // 次の回まで 2 秒休憩
+    if (round < count) await new Promise(r => setTimeout(r, 2000));
+  }
+  dlog('======= C: 連続テスト終了 =======');
+  document.getElementById('status-c').textContent = '連続テスト完了';
+}
+
+// 位置変動テスト: 再生開始位置を変えて毎回の brightness を記録
+async function cPositionTest(positions) {
+  dlog('======= C: 位置変動テスト positions=[' + positions.join(',') + '] 開始 =======');
+  for (const pos of positions) {
+    dlog('--- C: 開始位置 ' + pos + '秒 ---');
+    // 各カメラの currentTime を pos 秒にセット
+    cPaused.fill(false);
+    cVids.forEach(v => v.pause());
+    for (let i = 0; i < 4; i++) cVids[i].currentTime = pos;
+    await Promise.all(cVids.map(v => new Promise(r => {
+      v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); r(); });
+      setTimeout(r, 1500);
+    })));
+    await new Promise(r => setTimeout(r, 200));
+    ensureCRvfc();
+    // 再生開始 (50ms 順次)
+    for (let i = 0; i < 4; i++) {
+      cVids[i].play().catch(e => dlog('C[' + camNames[i] + ']: play() error: '+e.message));
+      if (i < 3) await new Promise(r => setTimeout(r, 50));
+    }
+    // 500ms 待って pause
+    await new Promise(r => setTimeout(r, 500));
+    cVids.forEach((v, i) => {
+      cT0[i] = performance.now();
+      v.pause();
+      cPaused[i] = true;
+      const b = measureBrightness(cCvs[i]);
+      const ct = v.currentTime;
+      dlog('C[' + camNames[i] + '] pos=' + pos + ': pause ct=' + ct.toFixed(3) + ' rs=' + v.readyState + ' brightness=' + b + (ct < pos + 0.01 ? ' ★再生開始せず' : '') + (b <= 5 && ct > pos + 0.01 ? ' ★真の暗転!' : ''));
+    });
+    const results = cVids.map((v, i) => camNames[i] + '(ct=' + v.currentTime.toFixed(2) + ',b=' + measureBrightness(cCvs[i]) + ')').join(' ');
+    dlog('C: pos=' + pos + ' 結果 ' + results);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  dlog('======= C: 位置変動テスト終了 =======');
+  document.getElementById('status-c').textContent = '位置変動テスト完了';
+}
+
+document.getElementById('build-time').textContent = '(build: 2026-04-13 12:15)';
 </script>
 </body>
 </html>
