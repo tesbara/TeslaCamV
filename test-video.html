@@ -44,6 +44,22 @@
 
   <div id="tests">
 
+    <!-- F: 1 video のみで currentTime セット → play の brightness 推移 -->
+    <div class="test-row" style="border-color:#ff8">
+      <div class="test-header">
+        <span class="test-label" style="color:#ff8">F: 1 video currentTime セット → play</span>
+        <span class="test-desc">1 video のみ。currentTime を指定秒に設定 → 再生開始 → 3 秒間 brightness 推移を記録。currentTime セット直後の暗転が single video でも起きるか確認</span>
+        <span class="test-status" id="status-f"></span>
+      </div>
+      <div class="test-body" style="max-width:360px"><video id="vid-f" playsinline muted style="visibility:hidden"></video><canvas id="cvs-f"></canvas><div class="cam-label">front</div></div>
+      <div class="btns">
+        <button onclick="fTraceSeekPlay(0)">ct=0→play</button>
+        <button onclick="fTraceSeekPlay(5)">ct=5→play</button>
+        <button onclick="fTraceSeekPlay(10)">ct=10→play</button>
+        <button onclick="fTracePlayOnly()">ct触らず→play (比較)</button>
+      </div>
+    </div>
+
     <!-- E: SPS 解析による暗転判定 -->
     <div class="test-row" style="border-color:#0ff">
       <div class="test-header">
@@ -807,6 +823,97 @@ async function cPositionTest(positions) {
 }
 
 // =====================================================================
+// F: 1 video のみで currentTime セット → play の brightness 推移
+// =====================================================================
+const fVid = document.getElementById('vid-f');
+const fCvs = document.getElementById('cvs-f');
+let fRvfcStarted = false;
+let fFileLoaded = false;
+
+function ensureFRvfc() {
+  if (fRvfcStarted) return;
+  const ctx = fCvs.getContext('2d');
+  function loop() {
+    if (fVid.videoWidth > 0 && fVid.videoHeight > 0) {
+      if (fCvs.width !== fVid.videoWidth || fCvs.height !== fVid.videoHeight) {
+        fCvs.width = fVid.videoWidth; fCvs.height = fVid.videoHeight;
+      }
+      ctx.drawImage(fVid, 0, 0, fVid.videoWidth, fVid.videoHeight);
+    }
+    if ('requestVideoFrameCallback' in fVid) fVid.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+  }
+  if ('requestVideoFrameCallback' in fVid) fVid.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+  fRvfcStarted = true;
+}
+
+async function ensureFFile() {
+  if (fFileLoaded) return;
+  if (!files[0]) { alert('まずフォルダを選択してください'); throw new Error('no file'); }
+  const blob = await mp4Faststart(files[0]);
+  fVid.src = URL.createObjectURL(blob);
+  await new Promise(r => {
+    fVid.addEventListener('loadeddata', function once() { fVid.removeEventListener('loadeddata', once); r(); });
+    setTimeout(r, 3000);
+  });
+  fFileLoaded = true;
+}
+
+async function fTraceCommon(label, setupFn) {
+  try { await ensureFFile(); } catch { return; }
+  dlog('======= F: ' + label + ' 開始 =======');
+  fVid.pause();
+  ensureFRvfc();
+  await setupFn();
+  // 再生開始
+  const playStart = performance.now();
+  fVid.play().catch(e => dlog('F: play() error: ' + e.message));
+  // 3 秒間の brightness 推移を 100ms 毎に記録
+  const trace = [];
+  const endTime = performance.now() + 3000;
+  while (performance.now() < endTime) {
+    const elapsed = Math.round(performance.now() - playStart);
+    trace.push({
+      t: elapsed,
+      ct: fVid.currentTime,
+      bCenter: measureBrightness(fCvs),
+      bFull: measureBrightnessFull(fCvs),
+    });
+    await new Promise(r => setTimeout(r, 100));
+  }
+  fVid.pause();
+  for (const s of trace) {
+    dlog('  t=' + s.t + 'ms ct=' + s.ct.toFixed(3) + ' bCenter=' + s.bCenter + ' bFull=' + s.bFull);
+  }
+  const finalB = trace[trace.length - 1].bFull;
+  const threshold = finalB * 0.8;
+  const firstNormal = trace.find(s => s.bFull >= threshold);
+  dlog('F: 最終 bFull=' + finalB + '、80% (' + threshold.toFixed(0) + ') 到達: ' + (firstNormal ? firstNormal.t + 'ms' : '未到達'));
+  dlog('======= F: ' + label + ' 終了 =======');
+  document.getElementById('status-f').textContent = label + ' 完了';
+}
+
+async function fTraceSeekPlay(targetSec) {
+  await fTraceCommon('ct=' + targetSec + '→play', async () => {
+    fVid.currentTime = targetSec;
+    await new Promise(r => {
+      fVid.addEventListener('seeked', function once() { fVid.removeEventListener('seeked', once); r(); });
+      setTimeout(r, 2000);
+    });
+    dlog('F: currentTime セット完了 (要求=' + targetSec + ', 実際=' + fVid.currentTime.toFixed(3) + ')');
+    await new Promise(r => setTimeout(r, 200));
+  });
+}
+
+async function fTracePlayOnly() {
+  await fTraceCommon('ct触らず→play', async () => {
+    dlog('F: currentTime 触らず (現在 ct=' + fVid.currentTime.toFixed(3) + ')');
+    await new Promise(r => setTimeout(r, 100));
+  });
+}
+
+// =====================================================================
 // E: SPS 解析による暗転判定
 // =====================================================================
 // SPS 解析: VUI の有無と video_full_range_flag を返す
@@ -902,7 +1009,7 @@ async function eAnalyzeAll() {
 }
 
 
-document.getElementById('build-time').textContent = '(build: 2026-04-13 15:35)';
+document.getElementById('build-time').textContent = '(build: 2026-04-13 17:00)';
 </script>
 </body>
 </html>
