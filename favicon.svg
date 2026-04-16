@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <!-- 青基調ダッシュカム + 赤レンズ。筐体は透過 -->
+  <!-- 青基調ダッシュカム + 赤レンズ。
+       筐体内部は縁の青より少し暗い青 (#1e40af) で塗りつぶす。
+       ダーク/ライトモードで同じ見た目にするため固定色を使用する
+       (以前は fill="none" でページ背景が透けていたためモードで色が変わっていた)。 -->
   <!-- 全体を 1.5px 上にずらして視覚的中央に調整 -->
-  <rect x="4" y="10.5" width="40" height="24" rx="4" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="4" y="10.5" width="40" height="24" rx="4" fill="#1e40af" stroke="#3b82f6" stroke-width="2"/>
   <circle cx="24" cy="22.5" r="8" fill="#cc0000" stroke="#60a5fa" stroke-width="1.5"/>
   <circle cx="24" cy="22.5" r="4" fill="#990000"/>
   <circle cx="24" cy="22.5" r="1.5" fill="#1a0505"/>
