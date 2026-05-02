@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Android Adaptive Icon の maskable PNG を生成する元 SVG。
+       generate-icons.cjs が読み込んで sharp で 192x192 / 512x512 PNG に変換する。
+       favicon.svg と同じデザインだが、 maskable 用途では「中央 80% (= 約 205px)」 が
+       安全領域、 「外側 10% ずつ (= 約 26px)」 がマスクで切られる可能性がある領域。
+       本デザインは要素を中央 168x110 に収めているので safe zone 内に収まる。 -->
+  <rect width="256" height="256" fill="#ffffff"/>
+  <rect x="44" y="80" width="168" height="110" rx="18" ry="18"
+        fill="none" stroke="#000000" stroke-width="8"/>
+  <circle cx="110" cy="135" r="32"
+          fill="none" stroke="#000000" stroke-width="8"/>
+  <circle cx="186" cy="102" r="11" fill="#dc2626"/>
+</svg>

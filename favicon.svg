@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <!-- 青基調ダッシュカム + 赤レンズ。
-       筐体内部は縁の青より少し暗い青 (#1e40af) で塗りつぶす。
-       ダーク/ライトモードで同じ見た目にするため固定色を使用する
-       (以前は fill="none" でページ背景が透けていたためモードで色が変わっていた)。 -->
-  <!-- 全体を 1.5px 上にずらして視覚的中央に調整 -->
-  <rect x="4" y="10.5" width="40" height="24" rx="4" fill="#1e40af" stroke="#3b82f6" stroke-width="2"/>
-  <circle cx="24" cy="22.5" r="8" fill="#cc0000" stroke="#60a5fa" stroke-width="1.5"/>
-  <circle cx="24" cy="22.5" r="4" fill="#990000"/>
-  <circle cx="24" cy="22.5" r="1.5" fill="#1a0505"/>
-  <circle cx="38" cy="16.5" r="2.5" fill="#ef4444"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- TeslaCamV favicon / PWA アイコン (= 採用案: sample-02 basic-bold)。
+       要件: 白背景 + 角丸の少し横長の長方形 (黒太線) + 少し左寄りのレンズ円 (黒太線)
+             + 右上の赤い塗りつぶしの小さい丸 (録画ランプ)。
+       Android Adaptive Icon の maskable 用途も兼ねるため、 背景は白で固定し、
+       重要要素 (本体 / レンズ / ランプ) は中央 safe zone (= 中央 約 168px) に収めている。
+       ダークタブ背景でも視認しやすいよう線は太め (8px) を採用。
+       ライト / ダークモードでの画面内表示は AppShell のインライン SVG 側で行うので、
+       本ファイルは固定色 (黒 + 赤) のシンプル構成とする。 -->
+  <rect width="256" height="256" fill="#ffffff"/>
+  <rect x="44" y="80" width="168" height="110" rx="18" ry="18"
+        fill="none" stroke="#000000" stroke-width="8"/>
+  <circle cx="110" cy="135" r="32"
+          fill="none" stroke="#000000" stroke-width="8"/>
+  <circle cx="186" cy="102" r="11" fill="#dc2626"/>
 </svg>
