@@ -1,16 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <!-- TeslaCamV favicon / PWA アイコン (= 採用案: sample-02 basic-bold)。
-       要件: 白背景 + 角丸の少し横長の長方形 (黒太線) + 少し左寄りのレンズ円 (黒太線)
-             + 右上の赤い塗りつぶしの小さい丸 (録画ランプ)。
+       要件: 白背景 + 角丸の少し横長の長方形 (黒太線、 内側薄グレー塗り) +
+             少し左寄りのレンズ円 (黒太線、 内側濃グレー塗り) +
+             右上の赤い塗りつぶしの小さい丸 (録画ランプ)。
        Android Adaptive Icon の maskable 用途も兼ねるため、 背景は白で固定し、
        重要要素 (本体 / レンズ / ランプ) は中央 safe zone (= 中央 約 168px) に収めている。
-       ダークタブ背景でも視認しやすいよう線は太め (8px) を採用。
+       縦位置は矩形の中心が viewBox 中心 (128) と一致するよう y=73 を採用 (= 元の y=80 から 7px 上)。
+       線幅は 8px、 ダークタブ背景でも視認しやすいよう線色は黒固定。
        ライト / ダークモードでの画面内表示は AppShell のインライン SVG 側で行うので、
-       本ファイルは固定色 (黒 + 赤) のシンプル構成とする。 -->
+       本ファイルは固定色 (黒線 + 薄グレー / 濃グレー塗り + 赤) のシンプル構成とする。 -->
   <rect width="256" height="256" fill="#ffffff"/>
-  <rect x="44" y="80" width="168" height="110" rx="18" ry="18"
-        fill="none" stroke="#000000" stroke-width="8"/>
-  <circle cx="110" cy="135" r="32"
-          fill="none" stroke="#000000" stroke-width="8"/>
-  <circle cx="186" cy="102" r="11" fill="#dc2626"/>
+  <rect x="44" y="73" width="168" height="110" rx="18" ry="18"
+        fill="#d4d4d4" stroke="#000000" stroke-width="8"/>
+  <circle cx="110" cy="128" r="32"
+          fill="#525252" stroke="#000000" stroke-width="8"/>
+  <circle cx="186" cy="95" r="11" fill="#dc2626"/>
 </svg>
