@@ -5,11 +5,18 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://*.tile.openstreetmap.org; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'">
     <link rel="icon" type="image/svg+xml" href="/TeslaCamV/favicon.svg" />
     <link rel="manifest" href="/TeslaCamV/manifest.json" />
-    <link rel="apple-touch-icon" href="/TeslaCamV/favicon.svg" />
-    <meta name="theme-color" content="#080d18" />
+    <!-- L-D4 (2026-05-04): apple-touch-icon は PNG 推奨 (= iOS Safari は SVG 完全
+         サポートでないバージョン多数)。 generate-icons.cjs で 180x180 PNG を出力する。 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/TeslaCamV/icons/apple-touch-icon-180.png" />
+    <!-- L-D3 (2026-05-04): theme-color をライト / ダークで出し分ける。
+         旧来 #080d18 (= 濃紺、 ダーク背景色) で固定していたためライトモードで使うと
+         ステータスバーが背景色 (#f8fafc 系) と乖離して「上だけ暗い」 違和感があった。
+         media クエリで OS のテーマに追従させる。 -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#080d18" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TeslaCamV</title>
-    <script type="module" crossorigin src="/TeslaCamV/assets/index-B2rSzJAV.js"></script>
+    <script type="module" crossorigin src="/TeslaCamV/assets/index-CPNWdqr-.js"></script>
     <link rel="modulepreload" crossorigin href="/TeslaCamV/assets/reasonColors-DO9m4kAB.js">
     <link rel="stylesheet" crossorigin href="/TeslaCamV/assets/index-BAAHlDWH.css">
   </head>
