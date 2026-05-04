@@ -1,14 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <!-- Android Adaptive Icon の maskable PNG を生成する元 SVG。
        generate-icons.cjs が読み込んで sharp で 192x192 / 512x512 PNG に変換する。
-       favicon.svg と同じデザインだが、 maskable 用途では「中央 80% (= 約 205px)」 が
-       安全領域、 「外側 10% ずつ (= 約 26px)」 がマスクで切られる可能性がある領域。
-       本デザインは要素を中央 168x110 に収め、 矩形中心が viewBox 中心 (128) に来るよう
-       y=73 を採用しているので safe zone 内に収まる。 -->
+       favicon.svg と同じデザイン (= A-other-9 / 青→紫グラデ) だが、 maskable 用途では
+       「中央 80% (= 約 205px)」 が安全領域、 「外側 10% ずつ (= 約 26px)」 がマスクで
+       切られる可能性がある領域。 本デザインは要素を中央 168x110 に収め、 矩形中心が
+       viewBox 中心 (128) に来るよう y=73 を採用しているので safe zone 内に収まる。 -->
+  <defs>
+    <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
   <rect width="256" height="256" fill="#ffffff"/>
-  <rect x="44" y="73" width="168" height="110" rx="18" ry="18"
-        fill="#d4d4d4" stroke="#000000" stroke-width="8"/>
-  <circle cx="110" cy="128" r="32"
-          fill="#525252" stroke="#000000" stroke-width="8"/>
+  <rect x="44" y="73" width="168" height="110" rx="18" ry="18" fill="url(#logoGrad)"/>
+  <circle cx="110" cy="128" r="32" fill="#ffffff"/>
   <circle cx="186" cy="95" r="11" fill="#dc2626"/>
 </svg>
