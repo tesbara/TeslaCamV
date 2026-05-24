@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>動画抽出モード UI サンプル v2 — TeslaCamV</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg-app: #0a0e15;
+      --bg-surface: #141a24;
+      --bg-card: #1a212e;
+      --bg-card-hover: #232a38;
+      --border-default: rgba(255, 255, 255, 0.08);
+      --text-primary: rgba(255, 255, 255, 0.92);
+      --text-secondary: rgba(255, 255, 255, 0.65);
+      --text-muted: rgba(255, 255, 255, 0.4);
+      --accent: #60a5fa;
+      --success: #4ade80;
+      --success-bg: rgba(34, 197, 94, 0.85);
+      --success-bg-hover: rgba(34, 197, 94, 1);
+      --danger: #ef4444;
+      --info-text: #60a5fa;
+      --btn-secondary: rgba(255, 255, 255, 0.08);
+      --btn-secondary-hover: rgba(255, 255, 255, 0.14);
+      --btn-danger: rgba(239, 68, 68, 0.85);
+      --btn-danger-hover: rgba(239, 68, 68, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", sans-serif;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 8px;
+    }
+    .lead {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0 0 28px;
+      line-height: 1.7;
+    }
+    .lead code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    /* ===== プレビュー枠 ===== */
+    .preview {
+      background: linear-gradient(180deg, #0e131c 0%, #161d29 40%, #0a0e15 100%);
+      border: 1px solid var(--border-default);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      margin-bottom: 24px;
+    }
+    .video-stub {
+      aspect-ratio: 16 / 9;
+      max-height: 340px;
+      background: radial-gradient(ellipse at center, #1c2533 0%, #0a0e15 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+    }
+    .video-stub::after {
+      content: "▶ 映像エリア (= 簡略表示)";
+    }
+
+    /* ===== シークバー領域 ===== */
+    .controls {
+      padding: 38px 24px 14px;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, transparent 100%);
+    }
+    .seek-wrapper {
+      position: relative;
+      padding: 22px 0 8px;
+      cursor: pointer;
+    }
+    .seekbar {
+      position: relative;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.15);
+      transition: height 0.18s ease;
+    }
+    .seek-wrapper:hover .seekbar { height: 8px; }
+    .progress {
+      position: absolute;
+      left: 0; top: 0; height: 100%;
+      width: 38%;
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 999px;
+    }
+    .clip-range {
+      position: absolute;
+      top: 0; height: 100%;
+      background: rgba(74, 222, 128, 0.3);
+      box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.55);
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+    .preview[data-mode="extract"] .clip-range { opacity: 1; }
+
+    .play-knob {
+      position: absolute;
+      top: 50%;
+      width: 16px; height: 16px;
+      background: white;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow:
+        0 0 0 2px rgba(96, 165, 250, 0.4),
+        0 0 16px rgba(96, 165, 250, 0.6),
+        0 2px 6px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+      z-index: 5;
+    }
+    .event-marker {
+      position: absolute;
+      top: 50%;
+      width: 8px; height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* ===== まち針 (= IN / OUT ピン) =====
+       抽出モード ON のときだけ表示。 normal mode では完全に隠す。 */
+    .pin {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      z-index: 8;
+      opacity: 0;
+      transition: opacity 0.22s ease, transform 0.22s ease;
+    }
+    .pin .stem {
+      position: absolute;
+      left: 50%;
+      bottom: 50%;
+      width: 3px;
+      height: 28px;
+      background: #4ade80;
+      transform: translateX(-50%);
+      border-radius: 1.5px;
+      box-shadow: 0 0 6px rgba(74, 222, 128, 0.7);
+    }
+    .pin .head {
+      position: absolute;
+      left: 50%;
+      bottom: calc(50% + 24px);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4ade80;
+      transform: translateX(-50%);
+      box-shadow:
+        0 0 0 2px rgba(74, 222, 128, 0.28),
+        0 0 12px rgba(74, 222, 128, 0.85);
+      transition: transform 0.12s ease;
+    }
+    .pin .tip {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 0; height: 0;
+      transform: translate(-50%, -2px);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #4ade80;
+      filter: drop-shadow(0 0 4px rgba(74, 222, 128, 0.7));
+    }
+    .pin-label {
+      position: absolute;
+      left: 50%;
+      bottom: calc(50% + 44px);
+      transform: translateX(-50%);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #052e16;
+      background: #4ade80;
+      padding: 2px 7px;
+      border-radius: 999px;
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      white-space: nowrap;
+    }
+    /* 抽出モード時のみ表示 + drag 受付 */
+    .preview[data-mode="extract"] .pin {
+      opacity: 1;
+      pointer-events: auto;
+      cursor: grab;
+    }
+    .preview[data-mode="extract"] .pin:active { cursor: grabbing; }
+    .preview[data-mode="extract"] .pin:hover .head { transform: translateX(-50%) scale(1.18); }
+
+    /* 開始 / 終了時刻 + コントロール pill */
+    .time-edges {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      font-variant-numeric: tabular-nums;
+      margin: 2px 0 8px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .time-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.7);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .time-pill .dim { color: rgba(255, 255, 255, 0.35); }
+    .spacer { flex: 1; }
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    .pill button {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .pill button:hover { background: rgba(255, 255, 255, 0.08); }
+
+    /* ===== 情報パネル ===== */
+    .info-panel {
+      border-top: 1px solid var(--border-default);
+      background: linear-gradient(180deg, rgba(20, 26, 36, 0.7) 0%, rgba(10, 14, 21, 0.85) 100%);
+      backdrop-filter: blur(10px);
+      padding: 10px 16px 12px;
+    }
+
+    /* 常時表示の action 行 (= 保管 / 削除 / サムネイル / 抽出) */
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* アイコンボタン (= 保管 / 削除 / サムネイル の共通スタイル) */
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 8px;
+      background: var(--btn-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .icon-btn:hover {
+      background: var(--btn-secondary-hover);
+      transform: translateY(-1px);
+    }
+    .icon-btn.danger {
+      background: rgba(239, 68, 68, 0.22);
+      color: #fecaca;
+    }
+    .icon-btn.danger:hover { background: rgba(239, 68, 68, 0.4); }
+    .icon-btn:disabled,
+    .icon-btn[aria-disabled="true"] {
+      opacity: 0.32;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: grayscale(0.55);
+    }
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* 抽出 toggle ボタン (= 中央配置のメイン CTA) */
+    .extract-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.24), rgba(74, 222, 128, 0.14));
+      border: 1px solid rgba(74, 222, 128, 0.4);
+      color: #bbf7d0;
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.22s ease;
+    }
+    .extract-toggle:hover {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.36), rgba(74, 222, 128, 0.22));
+      border-color: rgba(74, 222, 128, 0.65);
+      box-shadow: 0 0 16px -2px rgba(74, 222, 128, 0.5);
+    }
+    .extract-toggle svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .preview[data-mode="extract"] .extract-toggle {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.55);
+      color: #fecaca;
+    }
+    .preview[data-mode="extract"] .extract-toggle:hover {
+      background: rgba(239, 68, 68, 0.32);
+      border-color: rgba(239, 68, 68, 0.75);
+      box-shadow: 0 0 16px -2px rgba(239, 68, 68, 0.55);
+    }
+
+    /* ===== 抽出 mode 用エリア (= 2 行展開) =====
+       grid-template-rows で滑らかに展開 */
+    .extract-area {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .extract-area > .inner {
+      overflow: hidden;
+      min-height: 0;
+    }
+    .preview[data-mode="extract"] .extract-area {
+      grid-template-rows: 1fr;
+    }
+    .extract-rows {
+      padding: 12px 0 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .extract-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(74, 222, 128, 0.08);
+      border: 1px solid rgba(74, 222, 128, 0.22);
+      border-radius: 10px;
+    }
+    .extract-section .label {
+      font-size: 11px;
+      color: rgba(187, 247, 208, 0.85);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-right: 4px;
+      min-width: 64px;
+    }
+
+    /* IN / OUT 三角アイコンボタン */
+    .triangle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 12px;
+      min-width: 86px;
+      border-radius: 8px;
+      border: 1px solid rgba(74, 222, 128, 0.4);
+      background: rgba(74, 222, 128, 0.14);
+      color: #d1fae5;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+    .triangle-btn:hover {
+      background: rgba(74, 222, 128, 0.24);
+      border-color: rgba(74, 222, 128, 0.7);
+    }
+    .triangle-btn .arrow {
+      font-size: 11px;
+      line-height: 1;
+      color: #4ade80;
+    }
+    .triangle-btn .pos {
+      font-size: 11px;
+      color: rgba(187, 247, 208, 0.85);
+    }
+
+    .duration-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: rgba(74, 222, 128, 0.18);
+      border: 1px solid rgba(74, 222, 128, 0.42);
+      border-radius: 999px;
+      color: #d1fae5;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .duration-pill svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+    /* 動画保存 / 画像保存 (= primary action) */
+    .save-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: none;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .save-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .save-video {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      box-shadow: 0 4px 12px -2px rgba(34, 197, 94, 0.5);
+    }
+    .save-video:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px -2px rgba(34, 197, 94, 0.7);
+    }
+    .save-image {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      box-shadow: 0 4px 12px -2px rgba(59, 130, 246, 0.5);
+    }
+    .save-image:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px -2px rgba(59, 130, 246, 0.7);
+    }
+    .save-btn:disabled {
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.3);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* normal-actions (= 保管 / 削除 / サムネイル) を抽出 mode で grayscale */
+    .preview[data-mode="extract"] .normal-action {
+      opacity: 0.3;
+      filter: grayscale(0.6);
+      pointer-events: none;
+    }
+
+    /* ===== ガイド ===== */
+    .guide {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--text-secondary);
+    }
+    .guide h2 {
+      font-size: 14px;
+      margin: 0 0 8px;
+      color: var(--text-primary);
+    }
+    .guide ul { margin: 4px 0 12px; padding-left: 22px; }
+    .guide ul li { margin: 2px 0; }
+    .guide .ctrl {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 1px 8px;
+      border-radius: 4px;
+      vertical-align: -2px;
+    }
+    .guide .swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      vertical-align: -1px;
+      margin-right: 4px;
+    }
+    .guide .swatch.green { background: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.6); }
+    .guide .swatch.red { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+
+    /* イベント時刻トグル (= 動作確認用) */
+    .scenario-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      margin: 0 0 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .scenario-row label { cursor: pointer; }
+    .scenario-row input[type="checkbox"] { vertical-align: -2px; margin-right: 4px; }
+    .scenario-row .hint { color: var(--text-muted); font-size: 11px; }
+
+    @media (max-width: 720px) {
+      .page { padding: 16px 12px 60px; }
+      .controls { padding: 32px 14px 12px; }
+      .info-panel { padding: 10px 12px; }
+      .extract-section { flex-wrap: wrap; }
+      .extract-section .label { min-width: 56px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>動画抽出モード UI サンプル (v2)</h1>
+    <p class="lead">
+      再生画面下部の改修サンプル。 通常は <strong>保管 / 削除 / サムネイル / 抽出</strong> の 4 ボタンだけが並びます。
+      <code>抽出</code> をクリックすると mode 切替で「保管 / 削除 / サムネイル」 が非活性化し、 専用エリアが滑らかに展開して <strong>動画抽出</strong> (IN/OUT/動画保存) と <strong>画像抽出</strong> (画像保存) の 2 行が現れます。
+      シークバー上の <span style="color:#4ade80; font-weight:600;">まち針</span> は抽出 mode 中だけ表示&ドラッグ可能。
+    </p>
+
+    <!-- 動作確認用のシナリオ切替 -->
+    <div class="scenario-row">
+      <label>
+        <input type="checkbox" id="hasEventTime" checked />
+        イベント時刻あり (= eventTime が 50% 位置)
+      </label>
+      <span class="hint">OFF: イベント時刻なし → 抽出モード ON で IN=0% / OUT=100% (= 動画全体) が default</span>
+    </div>
+
+    <div class="preview" id="preview" data-mode="normal">
+      <!-- 映像エリア -->
+      <div class="video-stub"></div>
+
+      <!-- ===== シークバー ===== -->
+      <div class="controls">
+        <div class="seek-wrapper" id="seekWrapper">
+          <div class="seekbar" id="seekbar">
+            <div class="progress" id="progress" style="width: 38%;"></div>
+            <div class="clip-range" id="clipRange"></div>
+            <div class="event-marker" id="eventMarker" style="left: 50%;"></div>
+            <div class="play-knob" id="playKnob" style="left: 38%;"></div>
+
+            <!-- まち針 IN -->
+            <div class="pin" id="pinIn" data-kind="in">
+              <div class="pin-label">IN</div>
+              <div class="head"></div>
+              <div class="stem"></div>
+              <div class="tip"></div>
+            </div>
+            <!-- まち針 OUT -->
+            <div class="pin" id="pinOut" data-kind="out">
+              <div class="pin-label">OUT</div>
+              <div class="head"></div>
+              <div class="stem"></div>
+              <div class="tip"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="time-edges">
+          <span>14:23:05</span>
+          <span>14:24:05</span>
+        </div>
+
+        <div class="control-row">
+          <div class="time-pill">
+            <span>0:22.880</span>
+            <span class="dim">/</span>
+            <span>1:00.000</span>
+            <span class="dim">|</span>
+            <span>14:23:27</span>
+          </div>
+          <div class="spacer"></div>
+          <div class="pill">
+            <button title="先頭へ">⏮</button>
+            <button title="戻る">⏪</button>
+            <button title="再生 / 停止">⏯</button>
+            <button title="進む">⏩</button>
+            <button title="速度">1x</button>
+            <button title="イベントへ" style="color:#fecaca;">イベント</button>
+          </div>
+          <button class="icon-btn" style="border-radius:999px;" title="全画面">
+            <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== 情報パネル ===== -->
+      <div class="info-panel">
+        <!-- 常時表示の action 行 -->
+        <div class="action-row">
+          <!-- 保管 (= アイコンのみ、 tooltip 「保管」) -->
+          <button class="icon-btn normal-action" title="保管" aria-label="保管">
+            <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/></svg>
+          </button>
+          <!-- 削除 (= アイコンのみ、 tooltip 「削除」) -->
+          <button class="icon-btn danger normal-action" title="削除" aria-label="削除">
+            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+          <!-- サムネイル (= アイコンのみ、 tooltip 「イベント時刻を設定し、サムネイルを差し替える」) -->
+          <button class="icon-btn normal-action" title="イベント時刻を設定し、サムネイルを差し替える" aria-label="サムネイル">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+
+          <div class="spacer"></div>
+
+          <!-- 抽出 toggle ボタン -->
+          <button class="extract-toggle" id="extractToggle" title="動画抽出 / 画像抽出モードの ON / OFF を切替えます">
+            <span id="extractToggleIcon">
+              <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+            </span>
+            <span id="extractToggleLabel">抽出</span>
+          </button>
+        </div>
+
+        <!-- 抽出 mode 専用エリア (= 2 行展開) -->
+        <div class="extract-area">
+          <div class="inner">
+            <div class="extract-rows">
+              <!-- 行 1: 動画抽出 -->
+              <div class="extract-section">
+                <span class="label">動画抽出</span>
+                <!-- IN (= ◀) -->
+                <button class="triangle-btn" id="btnSetIn" title="動画抽出の開始位置を指定する">
+                  <span class="arrow">◀</span>
+                  <span>IN</span>
+                  <span class="pos" id="inPos">--:--.---</span>
+                </button>
+                <!-- OUT (= ▶) -->
+                <button class="triangle-btn" id="btnSetOut" title="動画抽出の終了位置を指定する">
+                  <span>OUT</span>
+                  <span class="arrow">▶</span>
+                  <span class="pos" id="outPos">--:--.---</span>
+                </button>
+                <!-- 範囲長 -->
+                <div class="duration-pill">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                  <span id="durLabel">0:00.000</span>
+                </div>
+                <div class="spacer"></div>
+                <!-- 動画保存 (= Lucide Film + DownloadCloud 風) -->
+                <button class="save-btn save-video" id="btnSaveVideo" title="指定した IN〜OUT 範囲を動画ファイルとして保存する">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><line x1="3" y1="9" x2="7" y2="9"/><line x1="3" y1="15" x2="7" y2="15"/><line x1="17" y1="9" x2="21" y2="9"/><line x1="17" y1="15" x2="21" y2="15"/></svg>
+                  <span>動画保存</span>
+                </button>
+              </div>
+
+              <!-- 行 2: 画像抽出 -->
+              <div class="extract-section">
+                <span class="label">画像抽出</span>
+                <span style="font-size:11px; color: rgba(187,247,208,0.55); margin-right:8px;">現在フレームを画像として保存します</span>
+                <div class="spacer"></div>
+                <!-- 画像保存 (= Lucide Camera 風) -->
+                <button class="save-btn save-image" id="btnSaveImage" title="現在表示中のフレームを JPEG 画像として保存する">
+                  <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <span>画像保存</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <h2>動作の試し方</h2>
+      <ul>
+        <li><strong>抽出</strong> ボタンを押すと抽出モードに切替わる。 もう一度押すと終了。 トグルボタン自身の色変化 (= 緑 → 赤) で現在のモードがわかる。</li>
+        <li>抽出モード ON で IN/OUT が未設定なら、 <strong>自動で default 範囲を設定</strong>:
+          <ul>
+            <li>イベント時刻あり → IN = eventTime − skipSeconds、 OUT = eventTime + skipSeconds (= E キー位置から ± skipSeconds の幅)</li>
+            <li>イベント時刻なし → IN = 0、 OUT = 動画末尾 (= 動画全体)</li>
+          </ul>
+          上のチェックボックスで切替えて両ケースを試せます。
+        </li>
+        <li>抽出モード中はシークバー上の <strong>まち針</strong> (= <span class="swatch green"></span>緑) を頭の丸い部分でつまんで左右にドラッグして IN / OUT を動かせる。 通常モードでは表示されない。</li>
+        <li>IN は OUT の左、 OUT は IN の右までしか移動できない (= 反転防止)。</li>
+        <li>「IN」 / 「OUT」 ボタンは現在位置をマーカーにセット (= 既存の挙動)。</li>
+        <li>赤い <span class="swatch red"></span> は <strong>イベント時刻マーカー</strong> (= 既存仕様、 抽出モードでも表示)。</li>
+      </ul>
+      <h2>UI 構成 (= 状態別)</h2>
+      <ul>
+        <li><strong>通常モード</strong>: <span class="ctrl">📦 保管</span> <span class="ctrl">🗑 削除</span> <span class="ctrl">🖼 サムネイル</span> ... <span class="ctrl">✂ 抽出</span> の 4 ボタン。 「保管 / 削除」 はアイコンのみで tooltip 表示、 「サムネイル」 は tooltip で <em>「イベント時刻を設定し、サムネイルを差し替える」</em>。</li>
+        <li><strong>抽出モード</strong>: 上の 3 ボタンが非活性 (= 灰色化)、 「抽出」 ボタンは終了用に色変化。 下に 2 行が展開:
+          <ul>
+            <li>動画抽出: <span class="ctrl">◀ IN</span> <span class="ctrl">OUT ▶</span> <span class="ctrl">⏱ 範囲長</span> <span class="ctrl">💾 動画保存</span></li>
+            <li>画像抽出: <span class="ctrl">📷 画像保存</span></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // ===== State =====
+    const TOTAL_MS = 60_000;     // 動画総尺 (= 1 分)
+    const SKIP_SEC = 5;          // 「E キー位置 = イベント±skip 秒」 の skip
+    const EVENT_PCT = 50;        // イベント時刻 (= 50%)
+    let clipInPct = null;        // null = 未設定 (= 抽出モード入りで auto default を入れる)
+    let clipOutPct = null;
+    let mode = "normal";
+
+    const preview = document.getElementById("preview");
+    const pinIn = document.getElementById("pinIn");
+    const pinOut = document.getElementById("pinOut");
+    const clipRange = document.getElementById("clipRange");
+    const seekbar = document.getElementById("seekbar");
+    const eventMarker = document.getElementById("eventMarker");
+    const extractToggle = document.getElementById("extractToggle");
+    const toggleIcon = document.getElementById("extractToggleIcon");
+    const toggleLabel = document.getElementById("extractToggleLabel");
+    const inPosLabel = document.getElementById("inPos");
+    const outPosLabel = document.getElementById("outPos");
+    const durLabel = document.getElementById("durLabel");
+    const hasEventTimeChk = document.getElementById("hasEventTime");
+
+    // ===== Helpers =====
+    function pctToMs(pct) { return Math.round(TOTAL_MS * (pct / 100)); }
+    function formatMs(ms) {
+      const total = Math.max(0, ms);
+      const m = Math.floor(total / 60_000);
+      const s = Math.floor((total % 60_000) / 1000);
+      const mm = total % 1000;
+      return `${m}:${String(s).padStart(2, "0")}.${String(mm).padStart(3, "0")}`;
+    }
+    function syncDom() {
+      // pin / clip range 表示
+      if (clipInPct !== null) {
+        pinIn.style.left = clipInPct + "%";
+      }
+      if (clipOutPct !== null) {
+        pinOut.style.left = clipOutPct + "%";
+      }
+      if (clipInPct !== null && clipOutPct !== null) {
+        clipRange.style.left = clipInPct + "%";
+        clipRange.style.width = (clipOutPct - clipInPct) + "%";
+      } else {
+        clipRange.style.width = "0%";
+      }
+      inPosLabel.textContent = clipInPct === null ? "--:--.---" : formatMs(pctToMs(clipInPct));
+      outPosLabel.textContent = clipOutPct === null ? "--:--.---" : formatMs(pctToMs(clipOutPct));
+      const dur = (clipInPct !== null && clipOutPct !== null) ? clipOutPct - clipInPct : 0;
+      durLabel.textContent = formatMs(pctToMs(dur));
+    }
+
+    // ===== Default IN/OUT 算出 (= 抽出モードに入るときに未設定なら適用) =====
+    function applyDefaultClipRange() {
+      if (clipInPct !== null && clipOutPct !== null) return; // 既に設定済みなら何もしない
+      const hasEvent = hasEventTimeChk.checked;
+      if (hasEvent) {
+        // E キー位置 = イベント時刻 − skipSeconds を IN、 イベント時刻 + skipSeconds を OUT
+        const skipPct = (SKIP_SEC * 1000) / TOTAL_MS * 100;
+        clipInPct = Math.max(0, EVENT_PCT - skipPct);
+        clipOutPct = Math.min(100, EVENT_PCT + skipPct);
+      } else {
+        // イベント時刻なし → 動画全体
+        clipInPct = 0;
+        clipOutPct = 100;
+      }
+    }
+
+    // ===== Mode toggle =====
+    function setMode(next) {
+      if (next === "extract") {
+        applyDefaultClipRange();
+      }
+      mode = next;
+      preview.dataset.mode = next;
+      if (next === "extract") {
+        toggleIcon.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        toggleLabel.textContent = "抽出を終了";
+      } else {
+        toggleIcon.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>';
+        toggleLabel.textContent = "抽出";
+      }
+      syncDom();
+    }
+    extractToggle.addEventListener("click", () => {
+      setMode(mode === "extract" ? "normal" : "extract");
+    });
+
+    // イベント時刻ありなし切替で event marker を表示 / 非表示。
+    hasEventTimeChk.addEventListener("change", () => {
+      eventMarker.style.display = hasEventTimeChk.checked ? "block" : "none";
+      // IN/OUT を一度クリアして default 再計算を試せるようにする
+      clipInPct = null;
+      clipOutPct = null;
+      // 抽出モード中なら即時 default 再計算
+      if (mode === "extract") applyDefaultClipRange();
+      syncDom();
+    });
+
+    // ===== Pin drag (= 抽出 mode 時のみ pointer-events で受ける) =====
+    function startPinDrag(pinEl, kind) {
+      pinEl.addEventListener("pointerdown", (e) => {
+        if (mode !== "extract") return;
+        e.preventDefault();
+        pinEl.setPointerCapture(e.pointerId);
+        const barRect = seekbar.getBoundingClientRect();
+
+        const onMove = (ev) => {
+          const rel = (ev.clientX - barRect.left) / barRect.width;
+          const pct = Math.max(0, Math.min(100, rel * 100));
+          if (kind === "in") {
+            clipInPct = Math.min(pct, (clipOutPct ?? 100) - 1);
+          } else {
+            clipOutPct = Math.max(pct, (clipInPct ?? 0) + 1);
+          }
+          syncDom();
+        };
+        const onUp = () => {
+          try { pinEl.releasePointerCapture(e.pointerId); } catch (_) { /* noop */ }
+          pinEl.removeEventListener("pointermove", onMove);
+          pinEl.removeEventListener("pointerup", onUp);
+        };
+        pinEl.addEventListener("pointermove", onMove);
+        pinEl.addEventListener("pointerup", onUp);
+      });
+    }
+    startPinDrag(pinIn, "in");
+    startPinDrag(pinOut, "out");
+
+    // ===== ボタン (= サンプル動作: 現在位置を IN/OUT にセット) =====
+    document.getElementById("btnSetIn").addEventListener("click", () => {
+      // 現在位置 (= 仮想的に 38%) にセット
+      clipInPct = Math.min(38, (clipOutPct ?? 100) - 1);
+      syncDom();
+    });
+    document.getElementById("btnSetOut").addEventListener("click", () => {
+      clipOutPct = Math.max(38, (clipInPct ?? 0) + 1);
+      syncDom();
+    });
+    document.getElementById("btnSaveVideo").addEventListener("click", () => {
+      if (clipInPct === null || clipOutPct === null) {
+        alert("IN / OUT が未設定です");
+        return;
+      }
+      alert(`動画として保存 (サンプル)\n\nIN  = ${formatMs(pctToMs(clipInPct))}\nOUT = ${formatMs(pctToMs(clipOutPct))}\n長さ = ${formatMs(pctToMs(clipOutPct - clipInPct))}`);
+    });
+    document.getElementById("btnSaveImage").addEventListener("click", () => {
+      alert("現在フレームを画像として保存 (サンプル)\n\n再生位置: 0:22.880");
+    });
+
+    // 初期状態
+    syncDom();
+  </script>
+</body>
+</html>
